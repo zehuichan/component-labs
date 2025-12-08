@@ -1,33 +1,49 @@
 <template>
-  <div class="bg-card p-3">
-    <!-- 原有的编辑按钮 -->
-    <el-space wrap class="mb-3">
-      <el-button @click="handleEditModeChange(true)"> 开启编辑 </el-button>
-      <el-button @click="handleEditModeChange(false)"> 关闭编辑 </el-button>
-      <el-button @click="handleEditModeChange('row')"> 点击行编辑 </el-button>
-      <el-button @click="handleEditModeChange('cell')">
-        点击单元格编辑
-      </el-button>
-      <el-button @click="handleEditModeChange('manual')">
-        手动单元格编辑
-      </el-button>
-      <el-button @click="handleValidate"> 校验数据 </el-button>
-    </el-space>
+  <el-config-provider size="small">
+    <div class="bg-card p-3">
+      <!-- 原有的编辑按钮 -->
+      <el-space wrap class="mb-3">
+        <el-button @click="handleEditModeChange(true)"> 开启编辑 </el-button>
+        <el-button @click="handleEditModeChange(false)"> 关闭编辑 </el-button>
+        <el-button @click="handleEditModeChange('row')"> 点击行编辑 </el-button>
+        <el-button @click="handleEditModeChange('cell')">
+          点击单元格编辑
+        </el-button>
+        <el-button @click="handleEditModeChange('manual')">
+          手动单元格编辑
+        </el-button>
+        <el-button @click="handleValidate"> 校验数据 </el-button>
+        <el-button type="danger" @click="runBenchmark">
+          性能测试 (1000条)
+        </el-button>
+        <el-button type="warning" @click="runMemoryLeakTest">
+          内存泄漏测试 (10轮)
+        </el-button>
+        <div class="ml-2 flex flex-col text-sm text-gray-500">
+          <span v-if="renderTime">渲染耗时: {{ renderTime.toFixed(2) }}ms</span>
+          <span v-if="memoryInfo">
+            内存变化: {{ memoryInfo.diff > 0 ? '+' : ''
+            }}{{ memoryInfo.diff }}MB (当前: {{ memoryInfo.used }}MB)
+          </span>
+        </div>
+      </el-space>
 
-    <plus-table
-      :loading="loading"
-      :columns="columns"
-      :data="tableData"
-      :rules="rules"
-      :editable="editable"
-      ref="tableRef"
-    >
-    </plus-table>
-  </div>
+      <PlusTable
+        :loading="loading"
+        :columns="columns"
+        :data="tableData"
+        :rules="rules"
+        :editable="editable"
+        ref="tableRef"
+      >
+      </PlusTable>
+    </div>
+  </el-config-provider>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, nextTick } from 'vue';
+import { PlusTable } from '@/components';
 
 const loading = ref(true);
 const tableRef = ref();
@@ -79,6 +95,83 @@ const handleEditModeChange = (mode) => {
 const handleValidate = async () => {
   const res = await tableRef.value.validate();
   console.log(res);
+};
+
+const renderTime = ref(0);
+const memoryInfo = ref(null);
+
+const getMemoryUsage = () => {
+  if (performance.memory) {
+    return {
+      used: performance.memory.usedJSHeapSize / 1024 / 1024,
+      total: performance.memory.totalJSHeapSize / 1024 / 1024,
+    };
+  }
+  return null;
+};
+
+const runBenchmark = async () => {
+  loading.value = true;
+  tableData.value = [];
+  memoryInfo.value = null;
+  await nextTick(); // Clear DOM
+
+  // Force GC if available (usually only in Chrome with --js-flags="--expose-gc")
+  if (window.gc) window.gc();
+
+  const startMem = getMemoryUsage();
+
+  // Generate 1000 rows for testing
+  const largeData = generateData(columns, 1000);
+
+  // Start timing
+  const start = performance.now();
+  tableData.value = largeData;
+  loading.value = false;
+
+  await nextTick(); // Wait for DOM update
+  renderTime.value = performance.now() - start;
+
+  const endMem = getMemoryUsage();
+  if (startMem && endMem) {
+    memoryInfo.value = {
+      diff: (endMem.used - startMem.used).toFixed(2),
+      used: endMem.used.toFixed(2),
+    };
+  }
+};
+
+const runMemoryLeakTest = async () => {
+  loading.value = true;
+  const iterations = 10;
+  const initialMem = getMemoryUsage();
+
+  console.log('Starting Memory Leak Test...');
+
+  for (let i = 0; i < iterations; i++) {
+    tableData.value = generateData(columns, 1000);
+    await nextTick();
+    tableData.value = [];
+    await nextTick();
+    if (window.gc) window.gc();
+  }
+
+  const finalMem = getMemoryUsage();
+  loading.value = false;
+
+  if (initialMem && finalMem) {
+    const diff = finalMem.used - initialMem.used;
+    memoryInfo.value = {
+      diff: diff.toFixed(2),
+      used: finalMem.used.toFixed(2),
+    };
+    console.log(
+      `Memory Leak Test Result: ${diff > 0 ? '+' : ''}${diff.toFixed(2)}MB`,
+    );
+    if (diff > 5) {
+      console.warn('Possible memory leak detected!');
+    }
+  }
 };
 
 onMounted(() => {
