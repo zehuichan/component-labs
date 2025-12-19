@@ -8,14 +8,25 @@
         v-if="hasEditable(scope.$index, index, column)"
         :model="scope.row"
         :rules="rules"
-        :ref="(instance) => changeInstance(instance, scope.$index, index, column)"
+        :ref="
+          (instance) => changeInstance(instance, scope.$index, index, column)
+        "
         :show-message="false"
       >
         <el-form-item :prop="column.prop">
-          <slot
-            :name="`editor-${column.prop}`"
-            v-bind="scope || {}"
-          />
+          <slot :name="`editor-${column.prop}`" v-bind="scope || {}">
+            <component
+              :is="
+                h(
+                  isString(column.component)
+                    ? resolveComponent(column.component)
+                    : column.component,
+                  column.componentProps || {},
+                )
+              "
+              v-model="scope.row[column.prop]"
+            />
+          </slot>
         </el-form-item>
       </el-form>
       <slot
@@ -28,13 +39,23 @@
 </template>
 
 <script setup>
-import { inject } from 'vue'
+import {
+  inject,
+  h,
+  resolveComponent,
+  markRaw,
+  resolveDynamicComponent,
+} from 'vue';
 
-import { set } from 'es-toolkit/compat'
+import { set } from 'es-toolkit/compat';
 
-import { isString } from '@/utils'
+import { isString } from '@/utils';
 
-import { IGNORE_COLUMN_FLAG, PLUS_TABLE_INJECTION_KEY, PLUS_TABLE_FORM_INJECTION_KEY } from './tokens'
+import {
+  IGNORE_COLUMN_FLAG,
+  PLUS_TABLE_INJECTION_KEY,
+  PLUS_TABLE_FORM_INJECTION_KEY,
+} from './tokens';
 
 const props = defineProps({
   columns: {
@@ -48,10 +69,10 @@ const props = defineProps({
     type: [Boolean, String, Object],
     default: false,
   },
-})
+});
 
-const tableRef = inject(PLUS_TABLE_INJECTION_KEY, null)
-const formRefs = inject(PLUS_TABLE_FORM_INJECTION_KEY, null)
+const tableRef = inject(PLUS_TABLE_INJECTION_KEY, null);
+const formRefs = inject(PLUS_TABLE_FORM_INJECTION_KEY, null);
 
 /**
  * @description 需求1：忽略 selection、index 等特殊列
@@ -62,45 +83,43 @@ const formRefs = inject(PLUS_TABLE_FORM_INJECTION_KEY, null)
  */
 const hasEditable = (rowIndex, columnIndex, column) => {
   if (IGNORE_COLUMN_FLAG.includes(column.type)) {
-    return false
+    return false;
   }
 
-  const cellMeta = tableRef.cellMeta
+  const cellMeta = tableRef.cellMeta;
 
   if (column.editable === true) {
-    return true
+    return true;
   }
   if (column.editable === false) {
-    return false
+    return false;
   }
 
   if (props.editable === true) {
-    return true
+    return true;
   }
 
   if (isString(props.editable)) {
     if (props.editable === 'row') {
-      return cellMeta.row === rowIndex && cellMeta.editable
+      return cellMeta.row === rowIndex && cellMeta.editable;
     }
     if (props.editable === 'cell' || props.editable === 'manual') {
       return (
         cellMeta.row === rowIndex &&
         cellMeta.col === columnIndex &&
         cellMeta.editable
-      )
+      );
     }
   }
 
-  return false
-}
+  return false;
+};
 
 const changeInstance = (instance, rowIndex, columnIndex, column) => {
-  const rules = props.rules
-  const field = column.prop
+  const rules = props.rules;
+  const field = column.prop;
   if (field && rules[field]) {
-    set(formRefs.value, [rowIndex, columnIndex], instance)
+    set(formRefs.value, [rowIndex, columnIndex], instance);
   }
-}
+};
 </script>
-
-<style lang="scss"></style>

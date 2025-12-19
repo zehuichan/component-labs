@@ -1,8 +1,7 @@
 <template>
-  <div ref="tableWrapperInstance" class="re-table">
+  <div ref="tableWrapperInstance" class="re-table" v-loading="loading">
     <el-table
       v-bind="$attrs"
-      v-loading="loading"
       border
       highlight-current-row
       show-overflow-tooltip
@@ -478,7 +477,7 @@ provide(
   }),
 );
 
-const formRefs = shallowRef({});
+const formRefs = shallowRef();
 provide(PLUS_TABLE_FORM_INJECTION_KEY, formRefs);
 
 onMounted(() => {
