@@ -1,5 +1,9 @@
 <template>
-  <el-table-column v-for="(column, index) in columns" v-bind="column">
+  <el-table-column
+    v-for="(column, index) in columns"
+    v-bind="column"
+    :key="column.prop"
+  >
     <template #header="scope">
       <slot :name="`header-${column.prop}`" v-bind="scope" />
     </template>
@@ -17,12 +21,7 @@
           <slot :name="`editor-${column.prop}`" v-bind="scope || {}">
             <component
               :is="
-                h(
-                  isString(column.component)
-                    ? resolveComponent(column.component)
-                    : column.component,
-                  column.componentProps || {},
-                )
+                h(fieldComponent(column.component), column.componentProps || {})
               "
               v-model="scope.row[column.prop]"
             />
@@ -39,16 +38,11 @@
 </template>
 
 <script setup>
-import {
-  inject,
-  h,
-  resolveComponent,
-  markRaw,
-  resolveDynamicComponent,
-} from 'vue';
+import { inject, h } from 'vue';
 
 import { set } from 'es-toolkit/compat';
 
+import { globalShareState } from '@/adapter/component';
 import { isString } from '@/utils';
 
 import {
@@ -73,6 +67,19 @@ const props = defineProps({
 
 const tableRef = inject(PLUS_TABLE_INJECTION_KEY, null);
 const formRefs = inject(PLUS_TABLE_FORM_INJECTION_KEY, null);
+
+const components = globalShareState.getComponents();
+
+const fieldComponent = (component) => {
+  const finalComponent = isString(component)
+    ? components[component]
+    : component;
+  if (!finalComponent) {
+    // 组件未注册
+    console.warn(`Component ${component} is not registered`);
+  }
+  return finalComponent;
+};
 
 /**
  * @description 需求1：忽略 selection、index 等特殊列

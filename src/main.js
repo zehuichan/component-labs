@@ -5,10 +5,13 @@ import App from './App.vue';
 // global css
 import './assets/design';
 
+import { initComponentAdapter } from './adapter/component';
 import { router } from './router'
 
-function bootstrap() {
+async function bootstrap() {
   const app = createApp(App);
+
+ await initComponentAdapter();
 
   app.use(router)
   app.mount('#app');

@@ -28,8 +28,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue';
-import { ElInput } from 'element-plus';
+import { ref, onMounted } from 'vue';
 import { PlusTable } from '@/components';
 
 const loading = ref(true);
@@ -51,7 +50,7 @@ const generateColumns = (length = 10, prefix = 'column', props) =>
     ...props,
     prop: `${prefix}${columnIndex}`,
     label: `Column ${columnIndex}`,
-    component: ElInput,
+    component: 'Input',
   }));
 
 const generateData = (columns, length = 200, prefix = 'row') =>
@@ -74,12 +73,6 @@ const columns = [
 ].concat(generateColumns(5));
 const data = generateData(columns, 5);
 
-// 带性能监控的编辑模式切换
-const handleEditModeChange = (mode) => {
-  editable.value = mode;
-};
-
-// 带性能监控的数据校验
 const handleValidate = async () => {
   const res = await tableRef.value.validate();
   console.log(res);
