@@ -4,7 +4,7 @@ import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import vueJsx from '@vitejs/plugin-vue-jsx';
 import tailwindcss from '@tailwindcss/vite';
-import components from 'unplugin-vue-components/vite';
+import Components from 'unplugin-vue-components/vite';
 import {
   AntDesignVueResolver,
   ElementPlusResolver,
@@ -16,7 +16,7 @@ export default defineConfig({
     vue(),
     vueJsx(),
     tailwindcss(),
-    components({
+    Components({
       resolvers: [AntDesignVueResolver(), ElementPlusResolver()],
       dts: false,
     }),

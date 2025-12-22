@@ -73,6 +73,10 @@ const columns = [
 ].concat(generateColumns(5));
 const data = generateData(columns, 5);
 
+const handleEditModeChange = (mode) => {
+  editable.value = mode;
+};
+
 const handleValidate = async () => {
   const res = await tableRef.value.validate();
   console.log(res);
