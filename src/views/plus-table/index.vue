@@ -1,32 +1,3 @@
-<template>
-  <el-config-provider size="small">
-    <div class="bg-card p-3">
-      <!-- 原有的编辑按钮 -->
-      <el-space wrap class="mb-3">
-        <el-button @click="handleEditModeChange(true)"> 开启编辑 </el-button>
-        <el-button @click="handleEditModeChange(false)"> 关闭编辑 </el-button>
-        <el-button @click="handleEditModeChange('row')"> 点击行编辑 </el-button>
-        <el-button @click="handleEditModeChange('cell')">
-          点击单元格编辑
-        </el-button>
-        <el-button @click="handleEditModeChange('manual')">
-          手动单元格编辑
-        </el-button>
-        <el-button @click="handleValidate"> 校验数据 </el-button>
-      </el-space>
-      <PlusTable
-        :loading="loading"
-        :columns="columns"
-        :data="tableData"
-        :rules="rules"
-        :editable="editable"
-        ref="tableRef"
-      >
-      </PlusTable>
-    </div>
-  </el-config-provider>
-</template>
-
 <script setup>
 import { ref, onMounted } from 'vue';
 import { PlusTable } from '@/components';
@@ -89,5 +60,34 @@ onMounted(() => {
   }, 1000);
 });
 </script>
+
+<template>
+  <el-config-provider size="small">
+    <div class="bg-card p-3">
+      <!-- 原有的编辑按钮 -->
+      <el-space wrap class="mb-3">
+        <el-button @click="handleEditModeChange(true)"> 开启编辑 </el-button>
+        <el-button @click="handleEditModeChange(false)"> 关闭编辑 </el-button>
+        <el-button @click="handleEditModeChange('row')"> 点击行编辑 </el-button>
+        <el-button @click="handleEditModeChange('cell')">
+          点击单元格编辑
+        </el-button>
+        <el-button @click="handleEditModeChange('manual')">
+          手动单元格编辑
+        </el-button>
+        <el-button @click="handleValidate"> 校验数据 </el-button>
+      </el-space>
+      <PlusTable
+        :loading="loading"
+        :columns="columns"
+        :data="tableData"
+        :rules="rules"
+        :editable="editable"
+        ref="tableRef"
+      >
+      </PlusTable>
+    </div>
+  </el-config-provider>
+</template>
 
 <style lang="scss"></style>

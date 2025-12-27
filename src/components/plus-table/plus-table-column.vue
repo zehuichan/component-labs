@@ -87,13 +87,14 @@ const fieldComponent = (component) => {
  * @description 需求3：props.editable = 'row' 时，行编辑
  * @description 需求5：props.editable = 'cell' 时，单元格编辑
  * @description 需求6：props.editable = 'manual' 时，手动单元格编辑
+ * @description todo需求7：如果单元格有校验错误，自动开启编辑模式（用于显示错误样式）
  */
 const hasEditable = (rowIndex, columnIndex, column) => {
   if (IGNORE_COLUMN_FLAG.includes(column.type)) {
     return false;
   }
 
-  const cellMeta = tableRef.cellMeta;
+  const cellMeta = tableRef?.cellMeta;
 
   if (column.editable === true) {
     return true;
@@ -108,13 +109,13 @@ const hasEditable = (rowIndex, columnIndex, column) => {
 
   if (isString(props.editable)) {
     if (props.editable === 'row') {
-      return cellMeta.row === rowIndex && cellMeta.editable;
+      return cellMeta?.row === rowIndex && cellMeta?.editable;
     }
     if (props.editable === 'cell' || props.editable === 'manual') {
       return (
-        cellMeta.row === rowIndex &&
-        cellMeta.col === columnIndex &&
-        cellMeta.editable
+        cellMeta?.row === rowIndex &&
+        cellMeta?.col === columnIndex &&
+        cellMeta?.editable
       );
     }
   }

@@ -1,7 +1,5 @@
-<script setup lang="ts"></script>
+<script setup></script>
 
-<template>
-  ant-table
-</template>
+<template>ant-table</template>
 
-<style scoped lang="scss"></style>
+<style lang="scss"></style>

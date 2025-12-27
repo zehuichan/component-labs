@@ -21,7 +21,7 @@ importers:
         specifier: ^1.11.19
         version: 1.11.19
       element-plus:
-        specifier: ^2.11.9
+        specifier: ^2.13.0
         version: 2.13.0(vue@3.5.26(typescript@5.9.3))
       es-toolkit:
         specifier: ^1.42.0

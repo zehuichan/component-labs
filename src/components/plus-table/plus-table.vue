@@ -33,6 +33,7 @@
         <slot name="empty" />
       </template>
     </el-table>
+    {{ cellMeta }}
   </div>
 </template>
 
@@ -109,15 +110,31 @@ const tableInstance = ref();
 const paginationInstance = ref();
 // 当前表格是否激活
 const activated = ref(false);
-const cachedData = ref([]);
 // 单元格元数据
 const cellMeta = ref({ ...ORIGINAL_CELL_META });
+
+const hasHidden = (column) => {
+  const hidden = column.hidden;
+  if (isBoolean(hidden)) {
+    return !hidden;
+  }
+  if (isFunction(hidden)) {
+    return !hidden(column);
+  }
+  return true;
+};
+
+const cachedData = shallowRef([]);
+
+const formRefs = shallowRef({});
+// 存储有校验错误的单元格，格式：Map<`${rowIndex}-${columnIndex}`, errorMessage>
+const validationErrors = ref(new Map());
 
 const cachedColumns = computed(() => {
   if (props.columns.length > 0) {
     return props.columns.map((column) => ({ ...column }));
   }
-  return tableInstance.value.columns;
+  return (tableInstance.value ?? {}).columns;
 });
 const refColumns = computed(() => {
   if (props.columns.length > 0) {
@@ -131,45 +148,52 @@ const rowMeta = computed(() => props.data[cellMeta.value.row]);
 // 列元数据
 const columnMeta = computed(() => refColumns.value[cellMeta.value.col]);
 
-const hasHidden = (column) => {
-  const hidden = column.hidden;
-  if (isBoolean(hidden)) {
-    return !hidden;
+const dirtyCells = computed(() => {
+  const dirty = new Set();
+  const columns = refColumns.value;
+  const data = props.data;
+  const cache = cachedData.value;
+
+  if (!cache || !data || cache.length === 0 || data.length === 0) {
+    return dirty;
   }
-  if (isFunction(hidden)) {
-    return !hidden(column);
+
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    const oldRow = cache[i];
+
+    if (!oldRow) continue;
+
+    for (let j = 0; j < columns.length; j++) {
+      const column = columns[j];
+      const prop = column.prop;
+
+      if (prop && !isEqual(row[prop], oldRow[prop])) {
+        dirty.add(`${i}-${j}`);
+      }
+    }
   }
-  return true;
-};
+
+  return dirty;
+});
 
 // 行类
-const rowClassName = ({ row, rowIndex }) => {
-  const classNames = [`re-table-row-${rowIndex}`];
-  return classNames.join(' ');
-};
+const rowClassName = ({ rowIndex }) => `re-table-row-${rowIndex}`;
 
 // 单元格类
 const cellClassName = ({ rowIndex, columnIndex }) => {
   const classNames = [`re-table-cell-${rowIndex}-${columnIndex}`];
+  const { row, col } = cellMeta.value;
 
-  if (rowIndex === cellMeta.value.row && columnIndex === cellMeta.value.col) {
+  if (rowIndex === row && columnIndex === col) {
     classNames.push('current-cell');
   }
 
-  if (!equalCell(rowIndex, columnIndex)) {
+  if (dirtyCells.value.has(`${rowIndex}-${columnIndex}`)) {
     classNames.push('dirty-cell');
   }
 
   return classNames.join(' ');
-};
-
-const equalCell = (rowIndex, columnIndex) => {
-  const column = refColumns.value[columnIndex];
-  const prop = column?.prop;
-  if (!prop) return true;
-  const rowData = props.data[rowIndex];
-  const oldRowData = cachedData.value[rowIndex];
-  return isEqual(rowData[prop], oldRowData[prop]);
 };
 
 const updateCell = (data) => {
@@ -267,10 +291,15 @@ const transformStart = (rowDelta, colDelta) => {
 };
 
 const transformEnd = (scrollIntoView) => {
-  const { row, activated, editable } = cellMeta.value;
+  const { row, activated, editable, col } = cellMeta.value;
+
+  // 检查当前单元格是否有校验错误
+  const cellKey = `${row}-${col}`;
+  const hasValidationError = validationErrors.value.has(cellKey);
 
   // 聚焦输入框（如有）
-  if (activated && (props.editable || editable)) {
+  // 如果有校验错误，即使 props.editable 为 false，也应该聚焦输入框
+  if (activated && (props.editable || editable || hasValidationError)) {
     nextTick(() => {
       const currentCell =
         tableInstance.value.$el.querySelector('.current-cell');
@@ -345,6 +374,14 @@ const handleCellClick = (row, column, cell, event) => {
   // 需求4：props.editable = cell 时，点击单元格编辑
   else if (props.editable === 'cell') {
     shouldEdit = true;
+  }
+
+  // 清除该单元格的校验错误标记（用户开始编辑时）
+  const cellKey = `${rowIndex}-${columnIndex}`;
+  if (validationErrors.value.has(cellKey)) {
+    const newErrors = new Map(validationErrors.value);
+    newErrors.delete(cellKey);
+    validationErrors.value = newErrors;
   }
 
   updateCell({
@@ -474,10 +511,10 @@ provide(
     rowMeta,
     columnMeta,
     hasHidden,
+    validationErrors,
   }),
 );
 
-const formRefs = shallowRef();
 provide(PLUS_TABLE_FORM_INJECTION_KEY, formRefs);
 
 onMounted(() => {
