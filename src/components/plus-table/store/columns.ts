@@ -1,9 +1,9 @@
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { defaultWindow } from '@vueuse/core';
 import { isNumber, isPlainObject, isString, sortBy } from 'es-toolkit';
 import { isSpecialColumn, SETTINGS_STORAGE_PREFIX } from '../util';
 import { assertColumnDependencies } from './dependencies';
-import type { PlusTable } from '../tokens';
+import type { TableCoreContext } from './context';
 import type { RowData } from '../table/defaults';
 import type { ColumnNode, PlusTableColumn } from '../table-column/defaults';
 
@@ -66,6 +66,8 @@ interface NormalizedColumns<T extends RowData> {
   leafIdsById: Map<string, readonly string[]>;
   configurableLeafIdsById: Map<string, readonly string[]>;
   allDataColumns: ColumnNode<T>[];
+  /** dependencies.triggerFields 反向索引：字段名 → 声明依赖了该字段的叶子数据列 */
+  triggerIndex: Map<string, ColumnNode<T>[]>;
   defaultHiddenIds: Set<string>;
 }
 
@@ -89,6 +91,7 @@ function normalize<T extends RowData>(columns: PlusTableColumn<T>[]): Normalized
   const leafIdsById = new Map<string, readonly string[]>();
   const configurableLeafIdsById = new Map<string, readonly string[]>();
   const allDataColumns: ColumnNode<T>[] = [];
+  const triggerIndex = new Map<string, ColumnNode<T>[]>();
   const defaultHiddenIds = new Set<string>();
 
   const walk = (list: PlusTableColumn<T>[], path: string, parentId: string): ColumnNode<T>[] =>
@@ -147,6 +150,12 @@ function normalize<T extends RowData>(columns: PlusTableColumn<T>[]): Normalized
           if (nodes) nodes.push(node);
           else byProp.set(column.prop, [node]);
         }
+        // 建反向索引，字段提交时不必再全列扫描找依赖方（triggerFields 已在上面断言过）
+        for (const field of new Set(column.dependencies?.triggerFields ?? [])) {
+          const dependents = triggerIndex.get(field);
+          if (dependents) dependents.push(node);
+          else triggerIndex.set(field, [node]);
+        }
       }
       if (!isSpecialColumn(column) && column.visible === false) {
         for (const leafId of configurableLeafIds) {
@@ -164,6 +173,7 @@ function normalize<T extends RowData>(columns: PlusTableColumn<T>[]): Normalized
     leafIdsById,
     configurableLeafIdsById,
     allDataColumns,
+    triggerIndex,
     defaultHiddenIds,
   };
 }
@@ -236,7 +246,15 @@ function buildColumnView<T extends RowData>(
 
       if (node.children?.length) {
         const children = visible(node.children, node.id, level + 1);
-        if (children.length) result.push({ ...node, children });
+        if (children.length) {
+          /**
+           * 子树可见叶子 id 的有序指纹。分组列的重挂载 key 直接读它，渲染期不再
+           * 递归 JSON.stringify；子节点自身的指纹已算好，逐层拼接即可自底向上得到
+           * 整棵子树的叶子序列。
+           */
+          const subtreeKey = children.map((child) => child.subtreeKey ?? child.id).join('|');
+          result.push({ ...node, children, subtreeKey });
+        }
       } else if (isSpecialColumn(node.column) || !hiddenIds.has(node.id)) {
         result.push(node);
       }
@@ -267,12 +285,13 @@ function buildColumnView<T extends RowData>(
   };
 }
 
-export function useColumns<T extends RowData = RowData>(table: PlusTable<T>) {
+export function useColumns<T extends RowData = RowData>(core: TableCoreContext<T>) {
+  const props = core.host.props;
   const normalized = computed<NormalizedColumns<T>>(() => {
-    if (!Array.isArray(table.props.columns)) {
+    if (!Array.isArray(props.columns)) {
       throw new TypeError('[PlusTable] columns 必须是数组。');
     }
-    return normalize(table.props.columns as PlusTableColumn<T>[]);
+    return normalize(props.columns as PlusTableColumn<T>[]);
   });
   const states = {
     _columns: computed<ColumnNode<T>[]>(() => normalized.value.tree),
@@ -283,7 +302,7 @@ export function useColumns<T extends RowData = RowData>(table: PlusTable<T>) {
   };
 
   const storageKey = computed(() =>
-    table.props.cache && table.props.id ? `${SETTINGS_STORAGE_PREFIX}${table.props.id}` : null,
+    props.cache && props.id ? `${SETTINGS_STORAGE_PREFIX}${props.id}` : null,
   );
 
   function reportStorageError(action: '读取' | '写入' | '重置', key: string, error: unknown): void {
@@ -338,6 +357,22 @@ export function useColumns<T extends RowData = RowData>(table: PlusTable<T>) {
     states.widthMap.value = settings.widths;
   }
 
+  /**
+   * 唯一落盘出口：settings 为 null 表示清除缓存条目。每个列设置写入点显式调用，
+   * 因此「重置」与「同一 tick 内的后续改动」不再需要靠 nextTick 回读状态去猜是哪一种。
+   */
+  function persist(settings: PersistedSettings | null): void {
+    const key = storageKey.value;
+    if (!key) return;
+    try {
+      const storage = getSettingsStorage();
+      if (settings) storage.setItem(key, JSON.stringify(settings));
+      else storage.removeItem(key);
+    } catch (error) {
+      reportStorageError(settings ? '写入' : '重置', key, error);
+    }
+  }
+
   function loadPersisted(): PersistedSettings | null {
     const key = storageKey.value;
     if (!key) return null;
@@ -369,18 +404,8 @@ export function useColumns<T extends RowData = RowData>(table: PlusTable<T>) {
     }
     settings.hidden = [...hiddenIds];
     applySettings(sanitizeSettings(settings, next));
-  });
-
-  watch([states.hiddenIds, states.orderMap, states.widthMap], () => {
-    const key = storageKey.value;
-    if (!key) return;
-    try {
-      const storage = getSettingsStorage();
-      const payload = snapshotSettings();
-      storage.setItem(key, JSON.stringify(payload));
-    } catch (error) {
-      reportStorageError('写入', key, error);
-    }
+    // 列结构变了，落盘的覆盖项也要跟着裁剪，别把已消失的列一直留在缓存里
+    persist(snapshotSettings());
   });
 
   /**
@@ -393,6 +418,9 @@ export function useColumns<T extends RowData = RowData>(table: PlusTable<T>) {
   const originColumns = computed(() => columnView.value.originColumns);
   const columns = computed(() => columnView.value.columns);
   const allColumns = computed(() => normalized.value.allDataColumns);
+  const triggerIndex = computed<ReadonlyMap<string, readonly ColumnNode<T>[]>>(
+    () => normalized.value.triggerIndex,
+  );
   const columnIndexMap = computed(() => columnView.value.columnIndexMap);
   const visibleColumnsById = computed(() => columnView.value.visibleById);
   const validationSchema = computed(() =>
@@ -439,6 +467,7 @@ export function useColumns<T extends RowData = RowData>(table: PlusTable<T>) {
       else next.add(leafId);
     }
     states.hiddenIds.value = next;
+    persist(snapshotSettings());
   }
 
   /** 列设置拖拽排序：把 dragId 放到同级 targetId 的前 / 后（跨级拖拽不生效） */
@@ -453,6 +482,7 @@ export function useColumns<T extends RowData = RowData>(table: PlusTable<T>) {
     const insertionIndex = targetIndex + (position === 'after' ? 1 : 0);
     ids.splice(insertionIndex, 0, dragId);
     states.orderMap.value = { ...states.orderMap.value, [drag.parentId]: ids };
+    persist(snapshotSettings());
   }
 
   /** 记录表头拖拽调宽后的列宽（持久化） */
@@ -470,32 +500,16 @@ export function useColumns<T extends RowData = RowData>(table: PlusTable<T>) {
       ...states.widthMap.value,
       [id]: rounded,
     };
+    persist(snapshotSettings());
   }
 
+  /**
+   * 回到列的初始配置并删除缓存条目。同一 tick 内紧接着发生的正常改动会自己
+   * 再落一次盘，把条目写回去——两者是各自独立的显式写入，不再互相干扰。
+   */
   function resetSettings() {
-    const settings = createDefaultSettings();
-    const hiddenIds = new Set(settings.hidden);
-    states.hiddenIds.value = hiddenIds;
-    states.orderMap.value = settings.order;
-    states.widthMap.value = settings.widths;
-    const key = storageKey.value;
-    if (!key) return;
-    void nextTick(() => {
-      if (
-        states.hiddenIds.value.size !== hiddenIds.size ||
-        [...hiddenIds].some((id) => !states.hiddenIds.value.has(id)) ||
-        Object.keys(states.orderMap.value).length > 0 ||
-        Object.keys(states.widthMap.value).length > 0
-      ) {
-        return;
-      }
-      try {
-        const storage = getSettingsStorage();
-        storage.removeItem(key);
-      } catch (error) {
-        reportStorageError('重置', key, error);
-      }
-    });
+    applySettings(createDefaultSettings());
+    persist(null);
   }
 
   return {
@@ -512,6 +526,7 @@ export function useColumns<T extends RowData = RowData>(table: PlusTable<T>) {
       originColumns,
       columns,
       allColumns,
+      triggerIndex,
       columnIndexMap,
       visibleColumnsById,
       validationSchema,

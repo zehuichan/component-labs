@@ -18,7 +18,8 @@ describe('PlusTable expose proxy', () => {
 
     expect(exposed.shared()).toBe('plus');
     expect(exposed.plusOnly()).toBe('plus-only');
-    expect(exposed.readMarker()).toBe('el-table');
+    // 透传成员的类型是 Partial：ElTable 未挂载时取到的就是 undefined
+    expect(exposed.readMarker?.()).toBe('el-table');
     expect(exposed.readMarker).toBe(exposed.readMarker);
     expect('readMarker' in exposed).toBe(true);
   });

@@ -1,15 +1,12 @@
 import { watch } from 'vue';
 import useStore from './index';
 import { getRowIdentity } from '../util';
-import type { PlusTable } from '../tokens';
-import type { PlusTableProps, RowData } from '../table/defaults';
+import type { TableHost } from './context';
+import type { RowData } from '../table/defaults';
 
-export function createStore<T extends RowData = RowData>(
-  table: PlusTable<T>,
-  props: PlusTableProps<T>,
-) {
-  const store = useStore<T>(table);
-  table.store = store;
+export function createStore<T extends RowData = RowData>(host: TableHost<T>) {
+  const store = useStore<T>(host);
+  const props = host.props;
 
   function readData(): T[] {
     if (!Array.isArray(props.data)) {
@@ -28,7 +25,7 @@ export function createStore<T extends RowData = RowData>(
     };
   }
 
-  store.commit('setData', readSnapshot().data);
+  store.setData(readSnapshot().data);
   let dataReadFailed = false;
   watch(
     () => {
@@ -42,7 +39,7 @@ export function createStore<T extends RowData = RowData>(
     },
     (snapshot) => {
       if (dataReadFailed) return;
-      store.commit('setData', snapshot.data);
+      store.setData(snapshot.data);
     },
   );
   watch(

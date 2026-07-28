@@ -378,19 +378,68 @@ describe('PlusTable columns', () => {
     expect(table.store.getErrors()).toEqual([]);
   });
 
+  it('writes each setting change through immediately and stays quiet while loading', () => {
+    const key = 'plus-table:settings:explicit-persist';
+    const { store } = setup(
+      [
+        { prop: 'a', label: 'A' },
+        { prop: 'b', label: 'B' },
+      ],
+      { cache: true, id: 'explicit-persist' },
+    );
+    // 加载阶段只读不写，没改过设置就不该凭空产生缓存条目
+    expect(localStorage.getItem(key)).toBeNull();
+
+    store.toggleColumnVisible('b', false);
+    expect(JSON.parse(localStorage.getItem(key)!)).toEqual({
+      hidden: ['b'],
+      order: {},
+      widths: {},
+    });
+
+    store.setColumnWidth('a', 120);
+    expect(JSON.parse(localStorage.getItem(key)!)).toEqual({
+      hidden: ['b'],
+      order: {},
+      widths: { a: 120 },
+    });
+  });
+
   it('removes the persisted entry when settings are reset', async () => {
     const { store } = setup([{ prop: 'a', label: 'A' }], {
       cache: true,
       id: 'reset-test',
     });
     store.setColumnWidth('a', 120);
-    await nextTick();
     expect(localStorage.getItem('plus-table:settings:reset-test')).not.toBeNull();
 
     store.resetSettings();
-    await nextTick();
 
     expect(localStorage.getItem('plus-table:settings:reset-test')).toBeNull();
+    await nextTick();
+    expect(localStorage.getItem('plus-table:settings:reset-test')).toBeNull();
+  });
+
+  it('prunes the persisted payload when the column schema changes', async () => {
+    const key = 'plus-table:settings:schema-prune';
+    const table = setup(
+      [
+        { prop: 'a', label: 'A' },
+        { prop: 'b', label: 'B' },
+      ],
+      { cache: true, id: 'schema-prune' },
+    );
+    table.store.toggleColumnVisible('b', false);
+    table.store.setColumnWidth('a', 100);
+
+    table.props.columns = [{ prop: 'b', label: 'B' }];
+    await nextTick();
+
+    expect(JSON.parse(localStorage.getItem(key)!)).toEqual({
+      hidden: ['b'],
+      order: {},
+      widths: {},
+    });
   });
 
   it('persists a legitimate setting changed in the same tick as reset', async () => {

@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue';
 import DemoApiTable from '@/components/demo/demo-api-table.vue';
 import DemoBlock from '@/components/demo/demo-block.vue';
 import DemoPage from '@/components/demo/demo-page.vue';
-import { PlusTable, type EditMode } from '@/components/plus-table';
+import { defineColumns, PlusTable, type EditMode } from '@/components/plus-table';
 
 defineOptions({ name: 'BasicEditingDemo' });
 
@@ -59,7 +59,7 @@ const statusOptions = [
   { label: '完成', value: 'done' },
 ];
 
-const baseColumns = [
+const baseColumns = defineColumns<Row>([
   { type: 'index', label: '#', width: 60 },
   {
     prop: 'name',
@@ -76,7 +76,7 @@ const baseColumns = [
     editable: true,
     component: 'input-number',
     componentProps: { min: 0, step: 100, controls: false },
-    formatter: (row: Row) => `¥ ${(row.amount ?? 0).toLocaleString('zh-CN')}`,
+    formatter: (row) => `¥ ${(row.amount ?? 0).toLocaleString('zh-CN')}`,
   },
   {
     prop: 'status',
@@ -85,7 +85,7 @@ const baseColumns = [
     editable: true,
     component: 'select',
     componentProps: { options: statusOptions, clearable: true },
-    formatter: (row: Row) => statusOptions.find((o) => o.value === row.status)?.label ?? row.status,
+    formatter: (row) => statusOptions.find((o) => o.value === row.status)?.label ?? row.status,
   },
   {
     prop: 'dueDate',
@@ -103,20 +103,21 @@ const baseColumns = [
     editable: true,
     component: 'switch',
   },
-];
+]);
 
 const columns = computed(() =>
   mode.value === 'row'
-    ? [
+    ? defineColumns<Row>([
         ...baseColumns,
         {
+          // 操作列不绑定行字段，prop 只用来定位 cell-actions 插槽
           prop: 'actions',
           type: 'operation',
           label: '操作',
           width: 140,
           fixed: 'right',
         },
-      ]
+      ])
     : baseColumns,
 );
 
@@ -177,8 +178,11 @@ function handleCellDblclick(row: Row) {
         </tr>
         <tr>
           <td><code>columns</code></td>
-          <td><code>PlusTableColumnDef[]</code></td>
-          <td>必填。列配置（可编辑、编辑器、格式化等）。</td>
+          <td><code>PlusTableColumn&lt;T&gt;[]</code></td>
+          <td>
+            必填。列配置（可编辑、编辑器、格式化等）；本页用
+            <code>defineColumns&lt;Row&gt;</code> 拿到行类型。
+          </td>
         </tr>
         <tr>
           <td><code>row-key</code></td>

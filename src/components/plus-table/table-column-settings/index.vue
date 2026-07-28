@@ -13,7 +13,7 @@ const items = computed(() => table.store.settingItems.value);
 function handleToggle(id: string, checked: boolean | string | number) {
   const item = items.value.find((it) => it.id === id);
   if (item?.disabled) return;
-  table.store.commit('toggleColumnVisible', id, !!checked);
+  table.store.toggleColumnVisible(id, !!checked);
 }
 
 function siblings(item: SettingItem): SettingItem[] {
@@ -32,7 +32,7 @@ function move(item: SettingItem, direction: -1 | 1) {
   const index = list.findIndex((candidate) => candidate.id === item.id);
   const target = list[index + direction];
   if (index < 0 || !target || item.disabled) return;
-  table.store.commit('updateColumnOrder', item.id, target.id, direction < 0 ? 'before' : 'after');
+  table.store.updateColumnOrder(item.id, target.id, direction < 0 ? 'before' : 'after');
 }
 
 const dragItem = ref<SettingItem | null>(null);
@@ -74,7 +74,7 @@ function handleDragOver(event: DragEvent, item: SettingItem) {
 function handleDrop(event: DragEvent, item: SettingItem) {
   if (!canDropOn(item)) return;
   event.preventDefault();
-  table.store.commit('updateColumnOrder', dragItem.value!.id, item.id, dropPosition.value);
+  table.store.updateColumnOrder(dragItem.value!.id, item.id, dropPosition.value);
   handleDragEnd();
 }
 

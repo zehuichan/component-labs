@@ -24,8 +24,14 @@ export function useStyle<T extends RowData = RowData>(table: PlusTable<T>) {
     () => !!table.props.adaptive && config.value.mode === 'container',
   );
 
-  const { top: gridTop } = useElementBounding(table.gridRef);
-  const { height: paginationHeight } = useElementBounding(table.paginationRef);
+  /**
+   * 关掉 window scroll 监听：它是 capture 阶段挂在 window 上的，表体内部每滚一帧
+   * 都会触发两次 getBoundingClientRect 强制回流。视口模式下表格本就占满剩余高度、
+   * 页面不该整体滚动，尺寸变化交给 ResizeObserver 与 window resize 即可。
+   */
+  const boundingOptions = { windowScroll: false } as const;
+  const { top: gridTop } = useElementBounding(table.gridRef, boundingOptions);
+  const { height: paginationHeight } = useElementBounding(table.paginationRef, boundingOptions);
   const { height: windowHeight } = useWindowSize();
 
   const tableHeight = computed<number | string | undefined>(() => {

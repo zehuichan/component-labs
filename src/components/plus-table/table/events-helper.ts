@@ -19,7 +19,7 @@ export function useEvents<T extends RowData = RowData>(table: PlusTable<T>) {
     _oldWidth: number,
     column: { columnKey?: string },
   ) {
-    if (column.columnKey) table.store.commit('setColumnWidth', column.columnKey, newWidth);
+    if (column.columnKey) table.store.setColumnWidth(column.columnKey, newWidth);
   }
 
   /**
@@ -42,7 +42,7 @@ export function useEvents<T extends RowData = RowData>(table: PlusTable<T>) {
     const mode = table.store.states.mode.value;
     const { rowIndex, colIndex } = getCellPosition(row, column);
     if (rowIndex < 0 || colIndex < 0) return;
-    table.store.commit('setCurrentCell', rowIndex, colIndex, false);
+    table.store.setCurrentCell(rowIndex, colIndex, false);
 
     const fromControl = isControl(event.target, _cell);
     if (mode === 'row' && table.store.isRowEditing(row)) {

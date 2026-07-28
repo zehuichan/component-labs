@@ -73,19 +73,19 @@ export const router = createRouter({
           path: 'erp/sales-order-linkage',
           name: 'erp-sales-order-linkage',
           component: SalesOrderLinkageDemo,
-          meta: { title: '销售订单联动', group: 'ERP 场景', order: 1 },
+          meta: { title: '销售订单联动', group: 'ERP 场景', order: 1, badge: 'beta' },
         },
         {
           path: 'erp/purchase-order-linkage',
           name: 'erp-purchase-order-linkage',
           component: PurchaseOrderLinkageDemo,
-          meta: { title: '采购订单联动', group: 'ERP 场景', order: 2 },
+          meta: { title: '采购订单联动', group: 'ERP 场景', order: 2, badge: 'beta' },
         },
         {
           path: 'erp/expense-report-linkage',
           name: 'erp-expense-report-linkage',
           component: ExpenseReportLinkageDemo,
-          meta: { title: '费用报销联动', group: 'ERP 场景', order: 3 },
+          meta: { title: '费用报销联动', group: 'ERP 场景', order: 3, badge: 'beta' },
         },
         {
           path: 'composables/use-auto-save',

@@ -50,15 +50,6 @@ export default defineComponent({
       );
     }
 
-    /**
-     * 子树叶子 id 指纹。分组列的 default slot 在 el-table-column 内部的渲染器里执行，
-     * 闭包捕获的 children 是普通数组，slot 执行时不读任何响应式源——子列显隐/排序后
-     * slot 不会重新渲染。把指纹编进 key，子树变化时强制重挂载整组来同步 el-table 列注册。
-     */
-    function subtreeKey(node: ColumnNode): string {
-      return JSON.stringify([node.id, node.children?.map(subtreeKey) ?? null]);
-    }
-
     function renderNode(node: ColumnNode, index: number): VNodeChild {
       const column = node.column;
 
@@ -66,14 +57,23 @@ export default defineComponent({
         return h(
           ElTableColumn,
           {
-            // index 进 key：顺序变化时强制重挂载，确保 el-table store 的列序与渲染一致
-            key: `${index}:${node.id}:${subtreeKey(node)}`,
+            /**
+             * index 进 key：顺序变化时强制重挂载，确保 el-table store 的列序与渲染一致。
+             * subtreeKey 是列视图构建期算好的可见叶子 id 指纹，子树变化时一并重挂整组，
+             * 让 el-table 的列注册跟上——它是兜底，不承诺零重挂。
+             */
+            key: `${index}:${node.id}:${node.subtreeKey ?? ''}`,
             ...nativeProps(column),
             columnKey: node.id,
           },
           {
             header: () => renderHeader(column),
-            default: () => node.children!.map((child, i) => renderNode(child, i)),
+            default: () => {
+              // 分组 slot 由 el-table-column 内部渲染器执行，闭包里的 children 只是普通数组。
+              // 读一次列视图，把该渲染副作用挂到视图重建上，子列显隐 / 排序才能推动 slot 重跑。
+              void table.store.states.originColumns.value;
+              return node.children!.map((child, i) => renderNode(child, i));
+            },
           },
         );
       }

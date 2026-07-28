@@ -87,7 +87,7 @@ export function getCellBinding<T extends RowData = RowData>(
   }
   const setValue = (next: unknown) => {
     if (isCellMode || useBuffer) table.store.setDraft(rowKey, prop, next);
-    else table.store.commit('setCellValue', row, rowIndex, prop, next);
+    else table.store.setCellValue(row, rowIndex, prop, next);
   };
   const flush = () => {
     if (!isCellMode && useBuffer) table.store.flushDraft(row, rowIndex, rowKey, prop);
@@ -193,7 +193,7 @@ export function getCellView<T extends RowData = RowData>(
   const error = prop ? table.store.getCellError(row, prop) : undefined;
 
   const depState = column.dependencies
-    ? table.store.getDependencyState(row, rowIndex, column)
+    ? table.store.getDependencyState(row, rowIndex, node)
     : undefined;
   const rawEditable = mode !== 'none' && !!prop && resolveEditable(row, rowIndex, column);
   const disabled = rawEditable && !!depState?.disabled;

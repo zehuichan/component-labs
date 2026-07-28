@@ -1,6 +1,6 @@
 import { shallowRef, triggerRef } from 'vue';
 import { cloneDeep, isEqual } from 'es-toolkit';
-import type { PlusTable } from '../tokens';
+import type { TableCoreContext } from './context';
 import type { RowData } from '../table/defaults';
 
 export interface DirtyCell {
@@ -12,14 +12,14 @@ export interface DirtyCell {
  * 脏行/脏格追踪。以 rowKey 寻址、以 rowKey 存基线快照（不是数组下标），
  * 原因与 history 一致：插入/删除/移动行或换页都会让下标错位。
  */
-export function useDirty<T extends RowData = RowData>(table: PlusTable<T>) {
+export function useDirty<T extends RowData = RowData>(core: TableCoreContext<T>) {
   const states = {
     dirtyCells: shallowRef(new Map<string, Set<string>>()),
   };
   const baseline = new Map<string, T>();
 
   function enabled(): boolean {
-    return !!table.store.states.dirtyTracking.value;
+    return core.states.dirtyTracking.value;
   }
 
   function ensureBaseline(row: T, rowKey: string): T {
@@ -39,7 +39,7 @@ export function useDirty<T extends RowData = RowData>(table: PlusTable<T>) {
 
   function markDirty(rowKey: string, prop: string): void {
     if (!enabled()) return;
-    const row = table.store.states.keysMap.value.get(rowKey)?.row;
+    const row = core.states.keysMap.value.get(rowKey)?.row;
     if (!row) return;
     const snapshot = ensureBaseline(row, rowKey);
     const isDirty = !isEqual(snapshot[prop], row[prop]);
@@ -80,7 +80,7 @@ export function useDirty<T extends RowData = RowData>(table: PlusTable<T>) {
 
   function getModifiedRows(): T[] {
     const map = states.dirtyCells.value;
-    return table.store.states.data.value.filter((row: T) => map.has(table.store.getRowKey(row)));
+    return core.states.data.value.filter((row: T) => map.has(core.getRowKey(row)));
   }
 
   function clearDirty(rowKey?: string, prop?: string): void {
@@ -103,8 +103,8 @@ export function useDirty<T extends RowData = RowData>(table: PlusTable<T>) {
   /** 把当前 data 视为新基线：清空脏标记，重建每行的基线快照 */
   function resetTracking(): void {
     baseline.clear();
-    for (const row of table.store.states.data.value) {
-      baseline.set(table.store.getRowKey(row), cloneDeep(row));
+    for (const row of core.states.data.value) {
+      baseline.set(core.getRowKey(row), cloneDeep(row));
     }
     states.dirtyCells.value = new Map();
   }

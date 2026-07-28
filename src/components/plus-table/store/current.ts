@@ -1,8 +1,9 @@
-import { computed, nextTick, reactive, shallowRef } from 'vue';
+import { computed, nextTick, reactive, shallowRef, type ComputedRef } from 'vue';
 import { clamp, isEqual } from 'es-toolkit';
 import { focusEditorElement } from '../util';
-import type { PlusTable } from '../tokens';
+import type { TableCoreContext } from './context';
 import type { RowData } from '../table/defaults';
+import type { ColumnNode } from '../table-column/defaults';
 
 export interface CellPosition {
   rowIndex: number;
@@ -15,12 +16,26 @@ export interface CellRef {
   colId: string;
 }
 
-/** reactive Set 使用的内部 key；数组序列化可避免 rowKey / colId 拼接碰撞。 */
+/**
+ * reactive Set 使用的内部 key。rowKey 经 getRowIdentity 归一化、colId 由列归一化生成，
+ * 两者都是组件内部的稳定字符串且不含 \0，用它作分隔符即可避免拼接碰撞，
+ * 又省掉活动格 / 编辑态判定这条高频路径上的 JSON 序列化。
+ */
 export function cellRefKey(rowKey: string, colId: string): string {
-  return JSON.stringify([rowKey, colId]);
+  return `${rowKey}\0${colId}`;
 }
 
-export function useCurrent<T extends RowData = RowData>(table: PlusTable<T>) {
+export interface CurrentDeps<T extends RowData = RowData> {
+  /** 当前可导航的叶子数据列（受列设置显隐 / 排序影响） */
+  columns: ComputedRef<ColumnNode<T>[]>;
+  getColumnIndex: (columnKey: string) => number;
+}
+
+export function useCurrent<T extends RowData = RowData>(
+  core: TableCoreContext<T>,
+  deps: CurrentDeps<T>,
+) {
+  const { host, states: coreStates } = core;
   const currentRef = shallowRef<CellRef | null>(null);
   const states = {
     /** 兼容公开 Store：对外仍按当前行列顺序呈现下标位置。 */
@@ -38,11 +53,11 @@ export function useCurrent<T extends RowData = RowData>(table: PlusTable<T>) {
   const currentCells = reactive(new Set<string>());
 
   function rowCount(): number {
-    return table.store.states.data.value.length;
+    return coreStates.data.value.length;
   }
 
   function colCount(): number {
-    return table.store.states.columns.value.length;
+    return deps.columns.value.length;
   }
 
   /** 把下标钳制到 [0, max-1]（max 为 0 时钳制到 0，交由调用方按 rowCount/colCount 判空） */
@@ -69,16 +84,16 @@ export function useCurrent<T extends RowData = RowData>(table: PlusTable<T>) {
 
   /** 公开下标调用边界进入内部稳定身份。 */
   function toCellRef(rowIndex: number, colIndex: number): CellRef | null {
-    const row = table.store.states.data.value[rowIndex];
-    const node = table.store.states.columns.value[colIndex];
+    const row = coreStates.data.value[rowIndex];
+    const node = deps.columns.value[colIndex];
     if (!row || !node) return null;
-    return { rowKey: table.store.getRowKey(row), colId: node.id };
+    return { rowKey: core.getRowKey(row), colId: node.id };
   }
 
   /** 按最新行列顺序把稳定身份解析回公开位置。 */
   function resolveCellPosition(ref: CellRef): CellPosition | null {
-    const rowIndex = table.store.states.keysMap.value.get(ref.rowKey)?.rowIndex;
-    const colIndex = table.store.getColumnIndex(ref.colId);
+    const rowIndex = coreStates.keysMap.value.get(ref.rowKey)?.rowIndex;
+    const colIndex = deps.getColumnIndex(ref.colId);
     if (rowIndex === undefined || colIndex < 0) return null;
     return { rowIndex, colIndex };
   }
@@ -90,9 +105,9 @@ export function useCurrent<T extends RowData = RowData>(table: PlusTable<T>) {
 
   /** 直接按实例内稳定 cell id 定位，不依赖 Element Plus 当前 DOM 行顺序。 */
   function getCellElRef(ref: CellRef): HTMLElement | null {
-    const grid = table.gridRef.value;
+    const grid = host.gridRef.value;
     if (!grid) return null;
-    return grid.querySelector<HTMLElement>(`#${CSS.escape(table.ids.cell(ref.rowKey, ref.colId))}`);
+    return grid.querySelector<HTMLElement>(`#${CSS.escape(host.ids.cell(ref.rowKey, ref.colId))}`);
   }
 
   function getCellEl(rowIndex: number, colIndex: number): HTMLElement | null {
@@ -186,7 +201,7 @@ export function useCurrent<T extends RowData = RowData>(table: PlusTable<T>) {
   }
 
   function focusGrid() {
-    table.gridRef.value?.focus({ preventScroll: true });
+    host.gridRef.value?.focus({ preventScroll: true });
   }
 
   /**

@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import DemoApiTable from '@/components/demo/demo-api-table.vue';
 import DemoBlock from '@/components/demo/demo-block.vue';
 import DemoPage from '@/components/demo/demo-page.vue';
-import { PlusTable } from '@/components/plus-table';
+import { defineColumns, PlusTable } from '@/components/plus-table';
 import type { ValidateResult } from '@/components/plus-table';
 
 defineOptions({ name: 'DependenciesValidationDemo' });
@@ -35,7 +35,7 @@ const data = ref<Row[]>([
   { id: 3, category: '', item: '', remark: '' },
 ]);
 
-const columns = [
+const columns = defineColumns<Row>([
   { type: 'index', label: '#', width: 60 },
   {
     prop: 'category',
@@ -52,7 +52,7 @@ const columns = [
       ],
       clearable: true,
     },
-    formatter: (row: Row) =>
+    formatter: (row) =>
       (({ hardware: '硬件', software: '软件' }) as Record<string, string>)[row.category] ?? '',
   },
   {
@@ -66,18 +66,18 @@ const columns = [
     componentProps: { clearable: true },
     dependencies: {
       triggerFields: ['category'],
-      componentProps: (row: Row) => ({
+      componentProps: (row) => ({
         options: CATEGORY_ITEMS[row.category] ?? [],
         disabled: !row.category,
       }),
-      trigger: (row: Row, api: { setValue: (p: string, v: unknown) => void }) => {
+      trigger: (row, api) => {
         const options = CATEGORY_ITEMS[row.category] ?? [];
         if (!options.some((o) => o.value === row.item)) {
           api.setValue('item', '');
         }
       },
     },
-    formatter: (row: Row) => {
+    formatter: (row) => {
       const options = CATEGORY_ITEMS[row.category] ?? [];
       return options.find((o) => o.value === row.item)?.label ?? row.item;
     },
@@ -89,7 +89,7 @@ const columns = [
     editable: true,
     component: 'input',
   },
-];
+]);
 
 async function handleValidate() {
   const result = await tableRef.value?.validate();

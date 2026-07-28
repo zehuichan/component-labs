@@ -16,6 +16,7 @@ defineOptions({ name: 'PlaygroundSidebar' });
 export interface PlaygroundNavLink {
   to: string;
   label: string;
+  badge?: string;
 }
 
 export interface PlaygroundNavGroup {
@@ -50,6 +51,12 @@ const route = useRoute();
               >
                 <RouterLink :to="link.to">
                   <span>{{ link.label }}</span>
+                  <span
+                    v-if="link.badge"
+                    class="shrink-0 rounded-full bg-[#d4ebea] px-1.5 py-px text-[10px] font-medium tracking-wide text-[var(--playground-accent)] lowercase dark:bg-[#0b6e6e40] dark:text-[var(--playground-accent)]"
+                  >
+                    {{ link.badge }}
+                  </span>
                 </RouterLink>
               </SidebarMenuButton>
             </SidebarMenuItem>

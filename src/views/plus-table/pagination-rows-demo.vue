@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 import DemoApiTable from '@/components/demo/demo-api-table.vue';
 import DemoBlock from '@/components/demo/demo-block.vue';
 import DemoPage from '@/components/demo/demo-page.vue';
-import { PlusTable } from '@/components/plus-table';
+import { defineColumns, PlusTable } from '@/components/plus-table';
 
 defineOptions({ name: 'PaginationRowsDemo' });
 
@@ -31,7 +31,7 @@ const pageRows = computed(() => {
   return allRows.value.slice(start, start + pageSize.value);
 });
 
-const columns = [
+const columns = defineColumns<Row>([
   { type: 'index', label: '#', width: 60 },
   {
     prop: 'name',
@@ -47,7 +47,7 @@ const columns = [
     editable: true,
     component: 'input',
   },
-];
+]);
 
 function handlePageChange(payload: { page: number; pageSize: number }) {
   page.value = payload.page;

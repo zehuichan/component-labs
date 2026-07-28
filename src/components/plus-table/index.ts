@@ -4,6 +4,7 @@ export { PlusTable };
 
 export { PLUS_TABLE_INJECTION_KEY } from './tokens';
 export { EDITOR_REGISTRY, resolveEditor } from './adapter';
+export { defineColumns } from './table-column/defaults';
 
 export type {
   EditorSlotProps,
@@ -47,4 +48,7 @@ export type {
   DependencyApi,
   PlusTableColumn,
   PlusTableColumnDef,
+  PlusTableDataColumn,
+  PlusTableSpecialColumn,
+  SpecialColumnType,
 } from './table-column/defaults';

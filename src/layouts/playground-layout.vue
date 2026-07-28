@@ -45,6 +45,7 @@ const navGroups = computed(() => {
     links: groupRoutes(group).map((item) => ({
       to: item.path,
       label: String(item.meta.title),
+      badge: typeof item.meta.badge === 'string' ? item.meta.badge : undefined,
     })),
   }));
 });

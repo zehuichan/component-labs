@@ -8,7 +8,7 @@ describe('playground-sidebar', () => {
   const mounted: Array<{ app: ReturnType<typeof createApp>; host: Element }> = [];
 
   async function mountWithRouter(
-    groups: { name: string; links: { to: string; label: string }[] }[],
+    groups: { name: string; links: { to: string; label: string; badge?: string }[] }[],
     initialPath = '/composables/use-auto-save',
   ) {
     const router: Router = createRouter({
@@ -83,5 +83,21 @@ describe('playground-sidebar', () => {
 
     const active = host.querySelector('[data-active="true"]');
     expect(active?.textContent).toContain('use-auto-save');
+  });
+
+  it('renders beta badges when provided', async () => {
+    const host = await mountWithRouter([
+      {
+        name: 'ERP 场景',
+        links: [
+          { to: '/composables/use-auto-save', label: '销售订单联动', badge: 'beta' },
+          { to: '/composables/use-form-draft', label: 'API Overview' },
+        ],
+      },
+    ]);
+
+    expect(host.textContent).toContain('beta');
+    expect(host.textContent).toContain('销售订单联动');
+    expect(host.textContent).toContain('API Overview');
   });
 });

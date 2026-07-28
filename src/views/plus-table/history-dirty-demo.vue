@@ -3,7 +3,7 @@ import { computed, ref, unref } from 'vue';
 import DemoApiTable from '@/components/demo/demo-api-table.vue';
 import DemoBlock from '@/components/demo/demo-block.vue';
 import DemoPage from '@/components/demo/demo-page.vue';
-import { PlusTable } from '@/components/plus-table';
+import { defineColumns, PlusTable } from '@/components/plus-table';
 
 defineOptions({ name: 'HistoryDirtyDemo' });
 
@@ -32,7 +32,7 @@ const data = ref<Row[]>([
   { id: 3, name: '外包结算', amount: 9200 },
 ]);
 
-const columns = [
+const columns = defineColumns<Row>([
   { type: 'index', label: '#', width: 60 },
   {
     prop: 'name',
@@ -50,7 +50,7 @@ const columns = [
     component: 'input-number',
     componentProps: { min: 0, step: 10, controls: false },
   },
-];
+]);
 
 // expose 的 ComputedRef 在模板 ref 上会被解包；用 unref 兼容两种形态
 const canUndo = computed(() => !!unref(tableRef.value?.canUndo));

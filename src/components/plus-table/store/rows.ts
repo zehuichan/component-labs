@@ -1,22 +1,20 @@
 import { clamp, cloneDeep } from 'es-toolkit';
 import { getRowIdentity } from '../util';
-import type { PlusTable } from '../tokens';
+import type { TableCoreContext } from './context';
 import type { RowData } from '../table/defaults';
 
 /** 行结构操作：全部以新数组经 update:data 回传，父级是唯一数据源 */
-export function useRows<T extends RowData = RowData>(table: PlusTable<T>) {
-  const data = () => table.store.states.data.value;
+export function useRows<T extends RowData = RowData>(core: TableCoreContext<T>) {
+  const data = () => core.states.data.value;
 
   function resolveRowKey(row: T): string {
-    return getRowIdentity(row, table.props.rowKey);
+    return getRowIdentity(row, core.states.rowKey.value);
   }
 
+  /** 现有行的 rowKey 已由 core.states.keysMap 建好索引，查重直接命中，不必再全表重算身份。 */
   function assertUniqueRowKey(row: T): void {
     const key = resolveRowKey(row);
-    const duplicated = data().some(
-      (current) => getRowIdentity(current, table.props.rowKey) === key,
-    );
-    if (duplicated) {
+    if (core.states.keysMap.value.has(key)) {
       throw new Error(`[PlusTable] insertRow 失败：rowKey="${key}" 已存在，不能插入重复行。`);
     }
   }
@@ -26,7 +24,7 @@ export function useRows<T extends RowData = RowData>(table: PlusTable<T>) {
     const list = [...data()];
     const at = index === undefined ? list.length : clamp(index, 0, list.length);
     list.splice(at, 0, row);
-    table.emit('update:data', list);
+    core.host.emit('update:data', list);
     return row;
   }
 
@@ -36,7 +34,7 @@ export function useRows<T extends RowData = RowData>(table: PlusTable<T>) {
       return undefined;
     }
     const [removed] = list.splice(index, 1);
-    table.emit('update:data', list);
+    core.host.emit('update:data', list);
     return removed;
   }
 
@@ -55,7 +53,7 @@ export function useRows<T extends RowData = RowData>(table: PlusTable<T>) {
     }
     const [moved] = list.splice(from, 1);
     list.splice(to, 0, moved!);
-    table.emit('update:data', list);
+    core.host.emit('update:data', list);
     return true;
   }
 

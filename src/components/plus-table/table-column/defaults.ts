@@ -34,15 +34,11 @@ export interface CellContext<T extends RowData = RowData> extends RowContext<T> 
   value: unknown;
 }
 
-/**
- * 列配置：继承 el-table-column 的 TableColumnCtx，width/align/fixed/sortable/formatter 等原生属性
- * 直接可用（含 type: 'index' | 'selection' | 'expand' 特殊列原生直通）。
- * 编辑控件字段（component / componentProps / modelProp）对齐 vben FormSchema。
- */
-export interface PlusTableColumn<T extends RowData = RowData>
+export type SpecialColumnType = 'index' | 'selection' | 'expand' | 'operation';
+
+/** 数据列与特殊列共有的字段，不单独对外使用 */
+interface PlusTableColumnBase<T extends RowData = RowData>
   extends Partial<Omit<TableColumnCtx<T>, 'children' | 'prop' | 'type'>>, EditorColumnFields<T> {
-  prop?: keyof T & string;
-  type?: 'index' | 'selection' | 'expand' | 'operation';
   /** 多级表头，组节点只需 label */
   children?: PlusTableColumn<T>[];
   /** 单元格是否可编辑 */
@@ -56,17 +52,60 @@ export interface PlusTableColumn<T extends RowData = RowData>
   visible?: boolean;
 }
 
+/** 数据列 / 分组表头：prop 取自行字段名 */
+export interface PlusTableDataColumn<T extends RowData = RowData> extends PlusTableColumnBase<T> {
+  prop?: keyof T & string;
+  type?: undefined;
+}
+
 /**
- * 开发侧列配置：字面量数组直接传入即可，无需显式标注 PlusTableColumn<T>[]。
- * 运行时由 useColumns 归一化；类型上保持宽松以匹配日常 object 字面量写法。
+ * 特殊列：勾选框 / 序号 / 展开由 el-table 原生渲染，operation 走 PlusTableCell。
+ * 它们不绑定行字段，prop 只用作列 id 与 cell-${prop} 插槽名。
  */
-export type PlusTableColumnDef = Record<string, any> & {
-  children?: PlusTableColumnDef[];
+export interface PlusTableSpecialColumn<
+  T extends RowData = RowData,
+> extends PlusTableColumnBase<T> {
+  prop?: string;
+  type: SpecialColumnType;
+}
+
+/**
+ * 列配置：继承 el-table-column 的 TableColumnCtx，width/align/fixed/sortable/formatter 等原生属性
+ * 直接可用（含 type: 'index' | 'selection' | 'expand' 特殊列原生直通）。
+ * 编辑控件字段（component / componentProps / modelProp）对齐 vben FormSchema。
+ */
+export type PlusTableColumn<T extends RowData = RowData> =
+  PlusTableDataColumn<T> | PlusTableSpecialColumn<T>;
+
+/**
+ * 默认列配置路径：允许直接传普通对象数组，不要求业务侧声明行类型或调用辅助函数。
+ * 配置合法性仍由 useColumns 在运行时统一校验。
+ *
+ * 需要 prop / 回调参数的严格类型检查时，可选用 PlusTableColumn<T> 或 defineColumns<T>()。
+ */
+export type PlusTableColumnDef<_T extends RowData = RowData> = Record<string, any> & {
+  children?: PlusTableColumnDef<_T>[];
 };
+
+/**
+ * 列配置的类型辅助函数，运行时原样返回数组。
+ * 字面量数组套一层即可拿到行类型上下文：prop 收敛到行字段名，
+ * editable / dependencies / render 等回调的 row 也不再是 any。
+ */
+export function defineColumns<T extends RowData = RowData>(
+  columns: PlusTableColumn<T>[],
+): PlusTableColumn<T>[] {
+  return columns;
+}
 
 /** 归一化后的列节点（列设置 / 渲染共用） */
 export interface ColumnNode<T extends RowData = RowData> {
   id: string;
   column: PlusTableColumn<T>;
   children?: ColumnNode<T>[];
+  /**
+   * 分组节点在列视图构建期算好的子树可见叶子 id 指纹，供渲染层做重挂载 key。
+   * 归一化树上的节点没有这个字段，只有 buildColumnView 产出的分组节点带。
+   */
+  subtreeKey?: string;
 }

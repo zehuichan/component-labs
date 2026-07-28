@@ -10,27 +10,17 @@ import { useKeyboard } from './table/keyboard-helper';
 import { useStyle } from './table/style-helper';
 import PlusTableColumnSettings from './table-column-settings/index.vue';
 import PlusTableColumnNode from './table-column';
+import { DEFAULT_PROPS } from './table/defaults';
 import type { TableInstance } from 'element-plus';
 import type { PlusTable } from './tokens';
-import type { InternalStore } from './store';
+import type { TableHost } from './store/context';
 import type { EditorSlotProps, HeaderSlotProps } from './table-cell/render-helper';
 import type { PlusTableEmits, PlusTableProps, RowData } from './table/defaults';
 import type { CellContext } from './table-column/defaults';
 
 defineOptions({ name: 'PlusTable', inheritAttrs: false });
 
-const props = withDefaults(defineProps<PlusTableProps<T>>(), {
-  mode: 'cell',
-  validateEvent: true,
-  cache: false,
-  adaptive: false,
-  page: 1,
-  pageSize: 20,
-  pageSizes: () => [10, 20, 50, 100],
-  history: false,
-  dirtyTracking: false,
-  hotkeyEnabled: true,
-});
+const props = withDefaults(defineProps<PlusTableProps<T>>(), DEFAULT_PROPS);
 
 const emit = defineEmits<PlusTableEmits<T>>();
 const slots = useSlots();
@@ -49,35 +39,36 @@ defineSlots<{
   [key: `editor-${string}`]: (props: EditorSlotProps<T>) => unknown;
 }>();
 
+/**
+ * 把 rowKey / colId 收敛成 id 片段：[A-Za-z0-9] 原样保留，其余字符转义成 `_<码点 base36>_`。
+ * 转义标记 `_` 自身也在被转义之列，所以映射是单射的；输出不含 `-`，拼接时用 `-` 作分隔符，
+ * 不同的 rowKey / colId 组合不会撞出同一个 id。
+ */
 function idPart(value: string): string {
-  let result = 'v';
-  for (let index = 0; index < value.length; index++) {
-    result += `-${value.charCodeAt(index).toString(36)}`;
-  }
-  return result;
+  return value.replace(/[^A-Za-z0-9]/g, (char) => `_${char.charCodeAt(0).toString(36)}_`);
 }
 
 const idPrefix = `ptbl-${idPart(useId())}`;
 const ids = {
   description: `${idPrefix}-description`,
-  cell: (rowKey: string, colId: string) => `${idPrefix}-cell-${idPart(rowKey)}_${idPart(colId)}`,
-  error: (rowKey: string, colId: string) => `${idPrefix}-error-${idPart(rowKey)}_${idPart(colId)}`,
+  cell: (rowKey: string, colId: string) => `${idPrefix}-cell-${idPart(rowKey)}-${idPart(colId)}`,
+  error: (rowKey: string, colId: string) => `${idPrefix}-error-${idPart(rowKey)}-${idPart(colId)}`,
 };
 
 const gridRef = ref<HTMLElement>();
 const paginationRef = ref<HTMLElement>();
 const tableRef = ref<TableInstance>();
 
-const table: PlusTable<T> = {
+const host: TableHost<T> = {
   props,
   emit,
   slots,
   gridRef,
   paginationRef,
   ids,
-  store: null as unknown as InternalStore<T>,
 };
-const store = createStore<T>(table, props);
+const store = createStore<T>(host);
+const table: PlusTable<T> = { ...host, store };
 provide(PLUS_TABLE_INJECTION_KEY, table);
 
 const style = useStyle(table);

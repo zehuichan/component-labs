@@ -88,7 +88,18 @@ export interface ValidateResult {
 }
 
 export interface PlusTableProps<T extends RowData = RowData> {
+  /**
+   * 行数据源。每行必须是可写的普通对象：不能冻结，参与编辑的字段不能是访问器，
+   * 且 rowKey 解析出的身份在行的生命周期内保持不变。
+   *
+   * 字段编辑走 writeRowField 就地修改行对象，**不会** emit('update:data')；
+   * 只有 insertRow / removeRow / moveRow / duplicateRow 这类行结构变更才回传新数组。
+   */
   data: T[];
+  /**
+   * 默认可直接传普通对象数组；如需严格校验 prop 与回调行类型，
+   * 可在业务侧显式使用 defineColumns<T>()。
+   */
   columns: PlusTableColumnDef[];
   rowKey: RowKey<T>;
   mode?: EditMode;
@@ -113,6 +124,24 @@ export interface PlusTableProps<T extends RowData = RowData> {
   /** 自定义热键总开关，不影响内置键盘导航 */
   hotkeyEnabled?: boolean;
 }
+
+/**
+ * props 默认值的单一来源：table.vue 的 withDefaults 与 store 侧读取兜底都取这里，
+ * 免得同一个默认值在组件和 store 各写一遍、改一处漏一处。
+ * pageSizes 按 withDefaults 对数组默认值的要求写成工厂函数。
+ */
+export const DEFAULT_PROPS = {
+  mode: 'cell' as EditMode,
+  validateEvent: true,
+  cache: false,
+  adaptive: false,
+  page: 1,
+  pageSize: 20,
+  pageSizes: () => [10, 20, 50, 100],
+  history: false,
+  dirtyTracking: false,
+  hotkeyEnabled: true,
+};
 
 export interface PlusTableEmits<T extends RowData = RowData> {
   (e: 'update:data', data: T[]): void;

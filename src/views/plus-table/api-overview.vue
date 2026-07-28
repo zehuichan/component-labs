@@ -23,8 +23,11 @@ defineOptions({ name: 'ApiOverview' });
         </tr>
         <tr>
           <td><code>columns</code></td>
-          <td><code>PlusTableColumnDef[]</code></td>
-          <td>必填。列配置（可字面量，无需显式标注泛型）。</td>
+          <td><code>PlusTableColumn&lt;T&gt;[]</code></td>
+          <td>
+            必填。列配置；字面量数组用 <code>defineColumns&lt;Row&gt;([...])</code>
+            包一层即可获得行类型（prop 收敛到字段名，回调参数带类型）。
+          </td>
         </tr>
         <tr>
           <td><code>row-key</code></td>

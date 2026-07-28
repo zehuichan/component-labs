@@ -4,12 +4,9 @@ import type { PlusTableColumn } from './table-column/defaults';
 
 export const SETTINGS_STORAGE_PREFIX = 'plus-table:settings:';
 
-/** 撤销重做栈上限（组件内部常量，不对外暴露） */
-export const HISTORY_STACK_LIMIT = 50;
-
 const NATIVE_RENDER_COLUMN_TYPES = ['selection', 'index', 'expand'] as const;
 
-export const SPECIAL_COLUMN_TYPES = [...NATIVE_RENDER_COLUMN_TYPES, 'operation'] as const;
+const SPECIAL_COLUMN_TYPES = [...NATIVE_RENDER_COLUMN_TYPES, 'operation'] as const;
 
 interface ColumnTypeLike {
   type?: string;
@@ -85,7 +82,7 @@ const CONTROL_SELECTOR = [
   '[data-ptbl-control]',
 ].join(', ');
 
-export const FOCUSABLE_EDITOR_SELECTOR =
+const FOCUSABLE_EDITOR_SELECTOR =
   `:is(${CONTROL_SELECTOR})` +
   ':not([disabled])' +
   ':not([aria-disabled="true"])' +

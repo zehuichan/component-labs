@@ -11,6 +11,38 @@ const ARROW_DELTAS: Record<string, [number, number]> = {
   ArrowRight: [0, 1],
 };
 
+/** 没有文本插入符的 input type：其上的方向键 / Delete 不具备本地编辑语义 */
+const NON_TEXT_INPUT_TYPES = new Set([
+  'button',
+  'checkbox',
+  'color',
+  'file',
+  'hidden',
+  'image',
+  'radio',
+  'range',
+  'reset',
+  'submit',
+]);
+
+/** Enter 带原生激活语义的控件（操作列按钮、链接、菜单项等），网格不得抢走 */
+const NATIVE_ENTER_SELECTOR = [
+  'button',
+  'a[href]',
+  'input[type="button"]',
+  'input[type="submit"]',
+  'input[type="reset"]',
+  '[role~="button"]',
+  '[role~="link"]',
+  '[role~="menuitem"]',
+  '[role~="menuitemcheckbox"]',
+  '[role~="menuitemradio"]',
+  '[role~="option"]',
+].join(', ');
+
+/** 焦点在控件内部时这次按键的归属：网格导航（grid）或编辑器本地（editor） */
+type KeyRoute = 'grid' | 'editor';
+
 interface ActiveEditorKeyActions {
   cancel: () => void;
   commit: () => void;
@@ -19,6 +51,54 @@ interface ActiveEditorKeyActions {
 
 function isIme(event: KeyboardEvent): boolean {
   return event.isComposing || event.keyCode === 229;
+}
+
+function isTextEntry(target: EventTarget | null): boolean {
+  if (target instanceof HTMLTextAreaElement) return true;
+  if (target instanceof HTMLInputElement) return !NON_TEXT_INPUT_TYPES.has(target.type);
+  return target instanceof HTMLElement && target.isContentEditable === true;
+}
+
+function hasNativeEnterAction(target: EventTarget | null): boolean {
+  return target instanceof Element && !!target.closest(NATIVE_ENTER_SELECTOR);
+}
+
+function isTextAreaLineBreak(event: KeyboardEvent): boolean {
+  const target = event.target as HTMLElement | null;
+  return target instanceof HTMLTextAreaElement && (event.shiftKey || event.altKey);
+}
+
+/**
+ * 焦点落在编辑器控件内部时，判断这次按键归网格还是归控件自身。
+ * table 模式编辑器常驻、row 模式整行编辑器常驻，焦点几乎永远在控件里，
+ * 若一律让位给原生行为，键盘就再也走不出这一格（自锁）。
+ */
+function routeKey(event: KeyboardEvent): KeyRoute {
+  if (isIme(event)) return 'editor';
+  const ctrl = event.ctrlKey || event.metaKey;
+  switch (event.key) {
+    case 'ArrowUp':
+    case 'ArrowDown':
+    case 'Tab':
+    case 'Escape':
+    case 'F2':
+      return 'grid';
+    case 'ArrowLeft':
+    case 'ArrowRight':
+    case 'Home':
+    case 'End':
+      // 文本控件里不带 Ctrl 的左右 / 行首尾是插入符移动，网格不能抢
+      return ctrl || !isTextEntry(event.target) ? 'grid' : 'editor';
+    case 'Delete':
+    case 'Backspace':
+      return isTextEntry(event.target) ? 'editor' : 'grid';
+    case 'Enter':
+      return isTextAreaLineBreak(event) || hasNativeEnterAction(event.target) ? 'editor' : 'grid';
+    default: {
+      const key = event.key.toLowerCase();
+      return ctrl && (key === 'z' || key === 'y') ? 'grid' : 'editor';
+    }
+  }
 }
 
 function isPrintableKey(event: KeyboardEvent): boolean {
@@ -70,7 +150,7 @@ export function useKeyboard<T extends RowData = RowData>(table: PlusTable<T>) {
       cancelEdit: () => table.store.cancelEdit(),
       setValue: (value) => {
         if (!cell) return;
-        table.store.commit('setCellValue', cell.row, cell.rowIndex, cell.prop, value);
+        table.store.setCellValue(cell.row, cell.rowIndex, cell.prop, value);
       },
       undo: table.store.undo,
       redo: table.store.redo,
@@ -93,11 +173,6 @@ export function useKeyboard<T extends RowData = RowData>(table: PlusTable<T>) {
       if (result !== false) return true;
     }
     return false;
-  }
-
-  function isTextAreaLineBreak(event: KeyboardEvent): boolean {
-    const target = event.target as HTMLElement | null;
-    return target instanceof HTMLTextAreaElement && (event.shiftKey || event.altKey);
   }
 
   /** cell / row 模式编辑器打开期间的按键 */
@@ -161,8 +236,8 @@ export function useKeyboard<T extends RowData = RowData>(table: PlusTable<T>) {
 
     if (event.key === 'Tab') {
       table.store.moveSequential(event.shiftKey ? -1 : 1);
-      if (mode === 'cell') table.store.focusGrid();
-      else table.store.focusCurrentCellEditor();
+      if (mode === 'row' || mode === 'table') table.store.focusCurrentCellEditor();
+      else table.store.focusGrid();
       event.preventDefault();
       return true;
     }
@@ -170,7 +245,7 @@ export function useKeyboard<T extends RowData = RowData>(table: PlusTable<T>) {
     return false;
   }
 
-  /** 非编辑态的导航 / 进编 / 撤销重做按键；焦点在编辑器控件内部时不接管 */
+  /** 导航 / 进编 / 撤销重做按键；none 模式只保留导航 */
   function handleBuiltinNavigation(event: KeyboardEvent): boolean {
     const mode = table.store.states.mode.value;
     const ctrl = event.ctrlKey || event.metaKey;
@@ -182,7 +257,7 @@ export function useKeyboard<T extends RowData = RowData>(table: PlusTable<T>) {
     };
     /** row/table 模式下编辑器随格常驻，移动高亮态后需把真实 DOM 焦点同步过去 */
     const syncFocus = () => {
-      if (mode !== 'cell') table.store.focusCurrentCellEditor();
+      if (mode === 'row' || mode === 'table') table.store.focusCurrentCellEditor();
     };
 
     const key = event.key.toLowerCase();
@@ -224,7 +299,7 @@ export function useKeyboard<T extends RowData = RowData>(table: PlusTable<T>) {
         return handled();
       }
       case 'F2': {
-        if (!cell) return false;
+        if (mode === 'none' || !cell) return false;
         if (mode === 'cell') {
           table.store.startEdit(cell.rowIndex, cell.colIndex);
         }
@@ -232,7 +307,7 @@ export function useKeyboard<T extends RowData = RowData>(table: PlusTable<T>) {
       }
       case 'Delete':
       case 'Backspace': {
-        if (!cell) return false;
+        if (mode === 'none' || !cell) return false;
         if (table.store.canEditCell(cell.rowIndex, cell.colIndex)) {
           table.store.clearCell(cell.rowIndex, cell.colIndex);
         }
@@ -296,8 +371,13 @@ export function useKeyboard<T extends RowData = RowData>(table: PlusTable<T>) {
       return;
     }
 
-    // 3. 非活动编辑器中的真实控件保留原生键盘行为；其余内置按键只在 grid 自身接管
+    // 3. 焦点在非活动编辑器的真实控件里：只有归网格的按键继续走内置导航，
+    //    其余（可打印字符 / 文本插入符移动 / IME）保留控件原生行为
     if (isControl(event.target, event.currentTarget) || event.target !== event.currentTarget) {
+      if (routeKey(event) === 'grid') {
+        if (handleGlobalKey(event)) return;
+        if (handleBuiltinNavigation(event)) return;
+      }
       runHotkeyBindings(normals, event);
       return;
     }

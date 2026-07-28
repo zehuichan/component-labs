@@ -1,9 +1,9 @@
-import { defineComponent, h } from 'vue';
+import { computed, defineComponent, h, ref } from 'vue';
 import { ElTooltip } from 'element-plus';
 import { usePlusTable } from '../tokens';
 import { getCellView } from './render-helper';
 import { getCellClasses, getEditorWrapperClass } from './style-helper';
-import type { PropType, VNodeChild } from 'vue';
+import type { ComputedRef, PropType, Ref, VNodeChild } from 'vue';
 import type { TableColumnCtx } from 'element-plus';
 import type { RowData } from '../table/defaults';
 import type { ColumnNode } from '../table-column/defaults';
@@ -21,6 +21,49 @@ export default defineComponent({
   },
   setup(props) {
     const table = usePlusTable();
+
+    /**
+     * 报错格会成片出现（整表校验一次能点亮成百上千格），每格都常驻一个 ElTooltip
+     * 就是成百上千个 popper 实例。这里推迟到首次悬停 / 聚焦才挂载，并接管可见性，
+     * 让挂载当帧就展开——用户不必移出再移回。无障碍不依赖它：错误文案始终由
+     * 视觉隐藏节点 + aria-describedby 提供。
+     *
+     * 这套状态本身也按需创建：从没报过错的格子只多一个 null 字段。
+     */
+    let tooltip: {
+      mounted: Ref<boolean>;
+      visible: ComputedRef<boolean>;
+      triggerProps: Record<string, unknown>;
+    } | null = null;
+
+    function errorTooltip() {
+      if (tooltip) return tooltip;
+      const mounted = ref(false);
+      const hovered = ref(false);
+      const focused = ref(false);
+      tooltip = {
+        mounted,
+        visible: computed(() => hovered.value || focused.value),
+        triggerProps: {
+          class: 'ptbl-cell-tooltip-trigger',
+          onMouseenter: () => {
+            hovered.value = true;
+            mounted.value = true;
+          },
+          onMouseleave: () => {
+            hovered.value = false;
+          },
+          onFocusin: () => {
+            focused.value = true;
+            mounted.value = true;
+          },
+          onFocusout: () => {
+            focused.value = false;
+          },
+        },
+      };
+      return tooltip;
+    }
 
     function renderDisplay(value: unknown, rowIndex: number): VNodeChild {
       const { row, node } = props;
@@ -84,15 +127,22 @@ export default defineComponent({
         children,
       );
 
-      return view.error
+      if (!view.error) return cell;
+
+      const { mounted, visible, triggerProps } = errorTooltip();
+      const trigger = h('div', triggerProps, [cell]);
+      return mounted.value
         ? h(
             ElTooltip,
-            { content: view.error.message, placement: 'top', effect: 'dark' },
             {
-              default: () => h('div', { class: 'ptbl-cell-tooltip-trigger' }, [cell]),
+              content: view.error.message,
+              placement: 'top',
+              effect: 'dark',
+              visible: visible.value,
             },
+            { default: () => trigger },
           )
-        : cell;
+        : trigger;
     };
   },
 });

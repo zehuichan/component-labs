@@ -51,7 +51,7 @@ describe('PlusTable cell identity and row lifecycle', () => {
     expect(store.startEdit(0, 1)).toBe(true);
     const currentRef = store.getCurrentRef();
 
-    store.commit('setData', [rows[1]!, rows[0]!]);
+    store.setData([rows[1]!, rows[0]!]);
 
     expect(store.getCurrentRef()).toBe(currentRef);
     expect(store.getCurrentRef()).toEqual({ rowKey: '1', colId: 'amount' });
@@ -87,7 +87,7 @@ describe('PlusTable cell identity and row lifecycle', () => {
     const changes: unknown[] = [];
     watch(store.states.currentCell, (value) => changes.push(value));
 
-    store.commit('setData', [...rows, { id: 3, name: 'three', amount: 30 }]);
+    store.setData([...rows, { id: 3, name: 'three', amount: 30 }]);
     await nextTick();
 
     expect(changes).toEqual([]);
@@ -98,7 +98,7 @@ describe('PlusTable cell identity and row lifecycle', () => {
     store.setCurrentCell(0, 0, false);
     expect(store.startEdit(0, 0)).toBe(true);
     store.setDraft('1', 'name', 'draft');
-    store.commit('setCellValue', rows[0]!, 0, 'name', '');
+    store.setCellValue(rows[0]!, 0, 'name', '');
     await store.validateCell(rows[0]!, 0, 'name');
 
     expect(store.canUndo.value).toBe(true);
@@ -106,7 +106,7 @@ describe('PlusTable cell identity and row lifecycle', () => {
     expect(store.getErrors()).toHaveLength(1);
 
     const replacement = { id: 1, name: 'replacement', amount: 100 };
-    store.commit('setData', [replacement, rows[1]!]);
+    store.setData([replacement, rows[1]!]);
 
     expect(store.states.currentCell.value).toBeNull();
     expect(store.states.editingCell.value).toBeNull();
@@ -120,7 +120,7 @@ describe('PlusTable cell identity and row lifecycle', () => {
     const { store, rows } = setup({ history: true, dirtyTracking: true });
     store.setCurrentCell(0, 0, false);
     expect(store.startEdit(0, 0)).toBe(true);
-    store.commit('setCellValue', rows[0]!, 0, 'name', 'changed');
+    store.setCellValue(rows[0]!, 0, 'name', 'changed');
 
     rows[0]!.id = 3;
     await nextTick();
@@ -133,10 +133,10 @@ describe('PlusTable cell identity and row lifecycle', () => {
 
   it('preserves keyed state and reindexes validation errors for a pure reorder', async () => {
     const { store, rows } = setup({ history: true, dirtyTracking: true });
-    store.commit('setCellValue', rows[0]!, 0, 'name', '');
+    store.setCellValue(rows[0]!, 0, 'name', '');
     await store.validateCell(rows[0]!, 0, 'name');
 
-    store.commit('setData', [rows[1]!, rows[0]!]);
+    store.setData([rows[1]!, rows[0]!]);
 
     expect(store.canUndo.value).toBe(true);
     expect(store.isRowDirty('1')).toBe(true);
@@ -161,7 +161,7 @@ describe('PlusTable cell identity and row lifecycle', () => {
   it('rejects duplicate row identities before mutating state', () => {
     const { store, rows } = setup();
 
-    expect(() => store.commit('setData', [rows[0]!, { ...rows[0]! }])).toThrow(/rowKey="1".*重复/);
+    expect(() => store.setData([rows[0]!, { ...rows[0]! }])).toThrow(/rowKey="1".*重复/);
     expect(store.states.data.value).toEqual(rows);
   });
 
@@ -201,7 +201,7 @@ describe('PlusTable cell identity and row lifecycle', () => {
 
     const committing = testTable.store.commitRowEdit(0);
     await validationStarted;
-    testTable.store.commit('setData', [rows[1]!, rows[0]!]);
+    testTable.store.setData([rows[1]!, rows[0]!]);
     releaseValidation();
 
     await expect(committing).resolves.toBe(true);
@@ -378,7 +378,7 @@ describe('PlusTable cell identity and row lifecycle', () => {
 
     const validating = testTable.store.validate(false);
     await firstStarted;
-    testTable.store.commit('setData', [rows[1]!, rows[0]!]);
+    testTable.store.setData([rows[1]!, rows[0]!]);
     releaseFirst();
 
     await expect(validating).resolves.toEqual({ valid: true, errors: [] });
@@ -426,7 +426,7 @@ describe('PlusTable cell identity and row lifecycle', () => {
 
     const validating = testTable.store.validate(false);
     await secondStarted;
-    testTable.store.commit('setData', [rows[1]!]);
+    testTable.store.setData([rows[1]!]);
     releaseSecond();
 
     await expect(validating).resolves.toEqual({ valid: true, errors: [] });
@@ -447,9 +447,7 @@ describe('PlusTable cell identity and row lifecycle', () => {
     });
     const row = testTable.store.states.data.value[0]!;
 
-    expect(() => testTable.store.commit('setCellValue', row, 0, 'key', 'next')).toThrow(
-      /rowKey.*不可修改/,
-    );
+    expect(() => testTable.store.setCellValue(row, 0, 'key', 'next')).toThrow(/rowKey.*不可修改/);
     expect(row.key).toBe('one');
     testTable.dispose();
   });
@@ -470,9 +468,7 @@ describe('PlusTable cell identity and row lifecycle', () => {
     });
     const row = testTable.store.states.data.value[0]!;
 
-    expect(() => testTable.store.commit('setCellValue', row, 0, 'code', 'next')).toThrow(
-      /rowKey.*不可修改/,
-    );
+    expect(() => testTable.store.setCellValue(row, 0, 'code', 'next')).toThrow(/rowKey.*不可修改/);
     expect(row.code).toBe('one');
     testTable.dispose();
   });
@@ -496,9 +492,7 @@ describe('PlusTable cell identity and row lifecycle', () => {
     });
     const row = testTable.store.states.data.value[0]!;
 
-    expect(() => testTable.store.commit('setCellValue', row, 0, 'code', 'next')).toThrow(
-      /rowKey.*不可修改/,
-    );
+    expect(() => testTable.store.setCellValue(row, 0, 'code', 'next')).toThrow(/rowKey.*不可修改/);
     expect(row.code).toBe('one');
     testTable.dispose();
   });
@@ -529,9 +523,7 @@ describe('PlusTable cell identity and row lifecycle', () => {
     });
     const row = testTable.store.states.data.value[0]!;
 
-    expect(() => testTable.store.commit('setCellValue', row, 0, 'code', 'next')).toThrow(
-      /rowKey.*不可修改/,
-    );
+    expect(() => testTable.store.setCellValue(row, 0, 'code', 'next')).toThrow(/rowKey.*不可修改/);
     expect(row.code).toBe('one');
     testTable.dispose();
   });
@@ -562,9 +554,7 @@ describe('PlusTable cell identity and row lifecycle', () => {
     });
     const row = testTable.store.states.data.value[0]!;
 
-    expect(() => testTable.store.commit('setCellValue', row, 0, 'code', 'next')).toThrow(
-      /rowKey.*不可修改/,
-    );
+    expect(() => testTable.store.setCellValue(row, 0, 'code', 'next')).toThrow(/rowKey.*不可修改/);
     expect(row.state.code).toBe('one');
     testTable.dispose();
   });

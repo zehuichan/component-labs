@@ -36,4 +36,19 @@ describe('PlusTable rows', () => {
     expect(table.store.moveRow(0, 100)).toBe(false);
     expect(table.store.states.data.value.map((row) => row.id)).toEqual([3, 1, 2, 4]);
   });
+
+  it('rejects inserting a row whose rowKey already exists', () => {
+    const table = createTestTable<Row>({
+      data: [
+        { id: 1, name: 'one' },
+        { id: 2, name: 'two' },
+      ],
+      columns: [{ prop: 'name' }],
+    });
+    tables.push(table);
+
+    expect(() => table.store.insertRow({ id: 2, name: 'clash' })).toThrow(/rowKey="2"/);
+    expect(() => table.store.duplicateRow(0, {})).toThrow(/rowKey="1"/);
+    expect(table.store.states.data.value).toHaveLength(2);
+  });
 });
