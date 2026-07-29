@@ -15,7 +15,7 @@ const visibleColumnCount = computed(() => leafItems.value.filter((item) => item.
 
 const drawerVisible = ref(false);
 
-function openDrawer() {
+function open() {
   drawerVisible.value = true;
 }
 
@@ -111,7 +111,7 @@ function handleDragEnd() {
   dropTargetId.value = null;
 }
 
-defineExpose({ openDrawer });
+defineExpose({ open });
 </script>
 
 <template>

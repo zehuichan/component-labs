@@ -39,7 +39,7 @@ export interface TableHost<T extends RowData = RowData> {
 
 /** PlusTableColumnSettings 对宿主暴露的能力 */
 export interface ColumnSettingsExpose {
-  openDrawer: () => void;
+  open: () => void;
 }
 
 /** 共享原语：各子 store 通过上下文读取，不再经 table.store 反向互访。 */

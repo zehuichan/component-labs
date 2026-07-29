@@ -39,7 +39,7 @@ describe('PlusTable context menu events', () => {
       event.preventDefault();
     });
     testTable.table.contextMenuRef.value = { open };
-    testTable.table.columnSettingsRef.value = { openDrawer: vi.fn() };
+    testTable.table.columnSettingsRef.value = { open: vi.fn() };
 
     const events = useEvents(testTable.table);
     return { testTable, events, open };

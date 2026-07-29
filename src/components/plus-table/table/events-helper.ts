@@ -49,7 +49,7 @@ export function useEvents<T extends RowData = RowData>(table: PlusTable<T>) {
         key: 'settings',
         label: '设置',
         handler: () => {
-          table.columnSettingsRef.value?.openDrawer();
+          table.columnSettingsRef.value?.open();
         },
       },
     ];
