@@ -23,8 +23,11 @@ export interface SettingItem {
 interface PersistedSettings {
   hidden: string[];
   order: Record<string, string[]>;
-  widths: Record<string, number>;
+  /** 列宽覆盖：数值为固定 px，null 表示强制自动宽度（压过列配置的 width） */
+  widths: WidthMap;
 }
+
+type WidthMap = Record<string, number | null>;
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(isString);
@@ -34,10 +37,12 @@ function isOrderMap(value: unknown): value is Record<string, string[]> {
   return isPlainObject(value) && Object.values(value).every(isStringArray);
 }
 
-function isWidthMap(value: unknown): value is Record<string, number> {
+function isWidthMap(value: unknown): value is WidthMap {
   return (
     isPlainObject(value) &&
-    Object.values(value).every((width) => isNumber(width) && Number.isFinite(width) && width > 0)
+    Object.values(value).every(
+      (width) => width === null || (isNumber(width) && Number.isFinite(width) && width > 0),
+    )
   );
 }
 
@@ -297,8 +302,8 @@ export function useColumns<T extends RowData = RowData>(core: TableCoreContext<T
     _columns: computed<ColumnNode<T>[]>(() => normalized.value.tree),
     hiddenIds: ref<Set<string>>(new Set()),
     orderMap: ref<Record<string, string[]>>({}),
-    /** 表头拖拽调宽后的覆盖宽度（叶子列 id → px） */
-    widthMap: ref<Record<string, number>>({}),
+    /** 列宽覆盖（叶子列 id → px，null 为强制自动）；缺 key 才表示回落列配置 */
+    widthMap: ref<WidthMap>({}),
   };
 
   const storageKey = computed(() =>
@@ -485,21 +490,40 @@ export function useColumns<T extends RowData = RowData>(core: TableCoreContext<T
     persist(snapshotSettings());
   }
 
-  /** 记录表头拖拽调宽后的列宽（持久化） */
-  function setColumnWidth(id: string, width: number) {
+  /**
+   * 写入列宽覆盖（持久化）。width 传 null 表示强制自动宽度——它会压过列配置里的
+   * width，这是「回落列配置」（clearColumnWidth）做不到的。
+   */
+  function setColumnWidth(id: string, width: number | null) {
     if (!getColumnById(id)) {
       throw new Error(`[PlusTable] setColumnWidth 失败：未知列 id="${id}"。`);
     }
-    const rounded = Math.round(width);
-    if (!Number.isFinite(rounded) || rounded <= 0) {
-      throw new RangeError(
-        `[PlusTable] setColumnWidth 失败：width 必须是有限正数，收到 ${width}。`,
-      );
+    let next: number | null = null;
+    if (width !== null) {
+      const rounded = Math.round(width);
+      if (!Number.isFinite(rounded) || rounded <= 0) {
+        throw new RangeError(
+          `[PlusTable] setColumnWidth 失败：width 必须是有限正数或 null，收到 ${width}。`,
+        );
+      }
+      next = rounded;
     }
     states.widthMap.value = {
       ...states.widthMap.value,
-      [id]: rounded,
+      [id]: next,
     };
+    persist(snapshotSettings());
+  }
+
+  /** 移除列宽覆盖，让列回到列配置的 width；未配置则交回 el-table 自动分配 */
+  function clearColumnWidth(id: string) {
+    if (!getColumnById(id)) {
+      throw new Error(`[PlusTable] clearColumnWidth 失败：未知列 id="${id}"。`);
+    }
+    if (!(id in states.widthMap.value)) return;
+    const next = { ...states.widthMap.value };
+    delete next[id];
+    states.widthMap.value = next;
     persist(snapshotSettings());
   }
 
@@ -520,6 +544,7 @@ export function useColumns<T extends RowData = RowData>(core: TableCoreContext<T
     toggleColumnVisible,
     updateColumnOrder,
     setColumnWidth,
+    clearColumnWidth,
     resetSettings,
     states: {
       ...states,

@@ -1,6 +1,9 @@
+import { isFunction } from 'es-toolkit';
 import { isControl } from '../util';
+import { DEFAULT_PROPS } from './defaults';
 import type { PlusTable } from '../tokens';
-import type { RowData } from './defaults';
+import type { ResolvedMenuItem } from '../table-context-menu/types';
+import type { ContextMenuContext, ContextMenuItem, RowData } from './defaults';
 
 export function useEvents<T extends RowData = RowData>(table: PlusTable<T>) {
   function handlePageChange(page: number) {
@@ -22,6 +25,37 @@ export function useEvents<T extends RowData = RowData>(table: PlusTable<T>) {
     if (column.columnKey) table.store.setColumnWidth(column.columnKey, newWidth);
   }
 
+  function isContextMenuEnabled() {
+    return table.props.contextMenuEnabled ?? DEFAULT_PROPS.contextMenuEnabled;
+  }
+
+  /** 表头右键：内置「隐藏 / 设置」；columnKey 渲染时已设为 node.id */
+  function handleHeaderContextmenu(column: { columnKey?: string }, event: MouseEvent) {
+    if (!isContextMenuEnabled() || !column.columnKey) return;
+    const columnId = column.columnKey;
+    const setting = table.store.settingItems.value.find((item) => item.id === columnId);
+    const hideDisabled = !!setting?.disabled;
+    const items: ResolvedMenuItem[] = [
+      {
+        key: 'hide',
+        label: '隐藏',
+        disabled: hideDisabled,
+        handler: () => {
+          if (hideDisabled) return;
+          table.store.toggleColumnVisible(columnId, false);
+        },
+      },
+      {
+        key: 'settings',
+        label: '设置',
+        handler: () => {
+          table.columnSettingsRef.value?.openDrawer();
+        },
+      },
+    ];
+    table.contextMenuRef.value?.open(event, items);
+  }
+
   /**
    * 用 el-table 回传的 column.columnKey（渲染时已设为 node.id）查找列下标，
    * 而不是 DOM cell.cellIndex——特殊列作为真实 <td> 渲染但不进 states.columns。
@@ -31,6 +65,52 @@ export function useEvents<T extends RowData = RowData>(table: PlusTable<T>) {
     const rowIndex = table.store.states.keysMap.value.get(rowKey)?.rowIndex ?? -1;
     const colIndex = column.columnKey ? table.store.getColumnIndex(column.columnKey) : -1;
     return { rowIndex, colIndex };
+  }
+
+  function resolveCellMenuItems(ctx: ContextMenuContext<T>): ResolvedMenuItem[] {
+    const source = table.props.contextMenu;
+    if (!source) return [];
+    const raw = isFunction(source) ? source(ctx) : source;
+    const resolved: ResolvedMenuItem[] = [];
+    for (let index = 0; index < raw.length; index++) {
+      const item = raw[index] as ContextMenuItem<T>;
+      if (item.when && !item.when(ctx)) continue;
+      const disabled = isFunction(item.disabled) ? !!item.disabled(ctx) : !!item.disabled;
+      resolved.push({
+        key: item.key ?? `${item.label}-${index}`,
+        label: item.label,
+        disabled,
+        separator: item.separator,
+        handler: () => item.handler(ctx),
+      });
+    }
+    return resolved;
+  }
+
+  function handleCellContextmenu(
+    row: T,
+    column: { columnKey?: string },
+    cell: HTMLElement,
+    event: MouseEvent,
+  ) {
+    if (!isContextMenuEnabled()) return;
+    if (isControl(event.target, cell)) return;
+
+    const { rowIndex, colIndex } = getCellPosition(row, column);
+    if (rowIndex < 0) return;
+    if (colIndex >= 0) table.store.setCurrentCell(rowIndex, colIndex, false);
+
+    const node = colIndex >= 0 ? (table.store.states.columns.value[colIndex] ?? null) : null;
+    const ctx: ContextMenuContext<T> = {
+      event,
+      row,
+      rowIndex,
+      colIndex,
+      prop: node?.column.prop,
+      column: node?.column ?? null,
+      data: table.store.states.data.value,
+    };
+    table.contextMenuRef.value?.open(event, resolveCellMenuItems(ctx));
   }
 
   function handleCellClick(
@@ -80,6 +160,8 @@ export function useEvents<T extends RowData = RowData>(table: PlusTable<T>) {
     handlePageChange,
     handlePageSizeChange,
     handleHeaderDragend,
+    handleHeaderContextmenu,
+    handleCellContextmenu,
     getCellPosition,
     handleCellClick,
     handleCellDblclick,

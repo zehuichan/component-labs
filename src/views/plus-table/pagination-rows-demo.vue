@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 import DemoApiTable from '@/components/demo/demo-api-table.vue';
 import DemoBlock from '@/components/demo/demo-block.vue';
 import DemoPage from '@/components/demo/demo-page.vue';
-import { defineColumns, PlusTable } from '@/components/plus-table';
+import { defineColumns, PlusTable, type ContextMenuItem } from '@/components/plus-table';
 
 defineOptions({ name: 'PaginationRowsDemo' });
 
@@ -62,19 +62,16 @@ function addRow() {
   page.value = Math.ceil(allRows.value.length / pageSize.value) || 1;
 }
 
-function removeFirstOnPage() {
-  if (pageRows.value.length === 0) return;
-  const id = pageRows.value[0]!.id;
+function removeRowById(id: number) {
   allRows.value = allRows.value.filter((row) => row.id !== id);
   const maxPage = Math.max(1, Math.ceil(allRows.value.length / pageSize.value));
   if (page.value > maxPage) page.value = maxPage;
 }
 
-function duplicateFirstOnPage() {
-  const source = pageRows.value[0];
-  if (!source) return;
-  const index = allRows.value.findIndex((row) => row.id === source.id);
-  if (index < 0) return;
+function duplicateRowById(id: number) {
+  const index = allRows.value.findIndex((row) => row.id === id);
+  const source = allRows.value[index];
+  if (index < 0 || !source) return;
   const clone: Row = {
     ...source,
     id: nextId++,
@@ -84,6 +81,37 @@ function duplicateFirstOnPage() {
   next.splice(index + 1, 0, clone);
   allRows.value = next;
 }
+
+function removeFirstOnPage() {
+  const first = pageRows.value[0];
+  if (!first) return;
+  removeRowById(first.id);
+}
+
+function duplicateFirstOnPage() {
+  const first = pageRows.value[0];
+  if (!first) return;
+  duplicateRowById(first.id);
+}
+
+const contextMenu: ContextMenuItem<Row>[] = [
+  {
+    key: 'add',
+    label: '新增一行',
+    handler: () => addRow(),
+  },
+  {
+    key: 'duplicate',
+    label: '复制此行',
+    separator: true,
+    handler: ({ row }) => duplicateRowById(row.id),
+  },
+  {
+    key: 'remove',
+    label: '删除此行',
+    handler: ({ row }) => removeRowById(row.id),
+  },
+];
 </script>
 
 <template>
@@ -92,7 +120,8 @@ function duplicateFirstOnPage() {
       传入 <code>total</code> 即启用分页 UI；组件<strong>不切片</strong>，由业务把当前页数据塞进
       <code>data</code>（服务端分页同理）。本页用内存全量 +
       <code>computed</code> 切片演示。行增删改请改全量源，不要对当前页数组调
-      <code>insertRow</code>（否则只动这一页）。
+      <code>insertRow</code>（否则只动这一页）。表体右键菜单通过
+      <code>context-menu</code> 配置，同样操作全量源。
     </template>
 
     <template #api>
@@ -116,6 +145,11 @@ function duplicateFirstOnPage() {
           <td><code>page-sizes</code></td>
           <td><code>number[]</code></td>
           <td>默认 <code>[10, 20, 50, 100]</code>。</td>
+        </tr>
+        <tr>
+          <td><code>context-menu</code></td>
+          <td><code>ContextMenuItem[] | (ctx) =&gt; ContextMenuItem[]</code></td>
+          <td>表体自定义右键菜单；空则保留浏览器原生菜单。</td>
         </tr>
       </DemoApiTable>
 
@@ -154,7 +188,7 @@ function duplicateFirstOnPage() {
       <DemoApiTable title="Slots" :headers="['名称', '说明']">
         <tr>
           <td><code>#title</code></td>
-          <td>顶栏左侧标题区，与 toolbar / 列设置同一行。</td>
+          <td>顶栏左侧标题区，与 toolbar 同一行（有 title 或 toolbar 时显示顶栏）。</td>
         </tr>
         <tr>
           <td><code>#summary</code></td>
@@ -168,8 +202,8 @@ function duplicateFirstOnPage() {
 
     <DemoBlock>
       <template #hint>
-        翻页 / 改 pageSize；「新增」追加到全量末尾并跳到末页；删除/复制针对当前页首行，改的是
-        <code>allRows</code>。
+        翻页 / 改 pageSize；toolbar 与表体右键菜单均可增删复制，改的是
+        <code>allRows</code>。表头右键可隐藏列 / 打开列设置。
       </template>
       <PlusTable
         :data="pageRows"
@@ -181,6 +215,7 @@ function duplicateFirstOnPage() {
         :page="page"
         :page-size="pageSize"
         :page-sizes="[5, 10, 20]"
+        :context-menu="contextMenu"
         @update:page="page = $event"
         @update:page-size="pageSize = $event"
         @page-change="handlePageChange"

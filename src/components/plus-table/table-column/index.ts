@@ -50,6 +50,12 @@ export default defineComponent({
       );
     }
 
+    /** 列宽覆盖优先：null 为强制自动（压过列配置的 width），缺 key 才回落列配置 */
+    function effectiveWidth(node: ColumnNode): PlusTableColumn['width'] {
+      const widths = table.store.states.widthMap.value;
+      return node.id in widths ? (widths[node.id] ?? undefined) : node.column.width;
+    }
+
     function renderNode(node: ColumnNode, index: number): VNodeChild {
       const column = node.column;
 
@@ -84,7 +90,7 @@ export default defineComponent({
           key: `${index}:${node.id}`,
           ...nativeProps(column),
           columnKey: node.id,
-          width: table.store.states.widthMap.value[node.id] ?? column.width,
+          width: effectiveWidth(node),
         });
       }
 
@@ -95,7 +101,7 @@ export default defineComponent({
           // header-dragend 调宽时用 columnKey 找回叶子列
           ...nativeProps(column),
           columnKey: node.id,
-          width: table.store.states.widthMap.value[node.id] ?? column.width,
+          width: effectiveWidth(node),
         },
         {
           header: () => renderHeader(column),

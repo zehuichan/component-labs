@@ -48,7 +48,10 @@ describe('PlusTable column rendering', () => {
 
   function mountNode(
     node: Ref<ColumnNode>,
-    states: { widthMap?: Ref<Record<string, number>>; originColumns?: Ref<ColumnNode[]> } = {},
+    states: {
+      widthMap?: Ref<Record<string, number | null>>;
+      originColumns?: Ref<ColumnNode[]>;
+    } = {},
   ) {
     const host = document.createElement('div');
     document.body.append(host);
@@ -93,6 +96,17 @@ describe('PlusTable column rendering', () => {
     await nextTick();
 
     expect(renderedProps.at(-1)).toEqual(expect.objectContaining({ columnKey: '#', width: 88 }));
+  });
+
+  it('drops the configured width when the override forces auto', async () => {
+    const node = shallowRef<ColumnNode>({
+      id: '#',
+      column: { type: 'index', label: '#', width: 60 },
+    });
+    mountNode(node, { widthMap: ref({ '#': null }) });
+    await nextTick();
+
+    expect(renderedProps.at(-1)).toEqual(expect.objectContaining({ width: undefined }));
   });
 
   it('keys a group by its precomputed subtree fingerprint', async () => {

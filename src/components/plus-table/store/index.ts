@@ -156,6 +156,7 @@ type PublicStoreKey =
   | 'toggleColumnVisible'
   | 'updateColumnOrder'
   | 'setColumnWidth'
+  | 'clearColumnWidth'
   | 'resetSettings'
   /** 活动格与导航 */
   | 'isCurrentCell'

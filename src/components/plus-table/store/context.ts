@@ -2,7 +2,10 @@ import { computed, shallowRef, type ComputedRef, type Ref, type ShallowRef, type
 import { DEFAULT_PROPS } from '../table/defaults';
 import type { PlusTableEmits, PlusTableProps, RowData, RowKey, EditMode } from '../table/defaults';
 import type { ColumnNode } from '../table-column/defaults';
+import type { ContextMenuExpose } from '../table-context-menu/types';
 import type { WriteRowFieldResult } from './write';
+
+export type { ContextMenuExpose } from '../table-context-menu/types';
 
 export interface RowLocation<T extends RowData = RowData> {
   row: T;
@@ -23,11 +26,20 @@ export interface TableHost<T extends RowData = RowData> {
   slots: Slots;
   gridRef: Ref<HTMLElement | undefined>;
   paginationRef: Ref<HTMLElement | undefined>;
+  /** 列设置抽屉 */
+  columnSettingsRef: Ref<ColumnSettingsExpose | undefined>;
+  /** 右键菜单（表头内置 + 表体自定义） */
+  contextMenuRef: Ref<ContextMenuExpose | undefined>;
   ids: {
     description: string;
     cell: (rowKey: string, colId: string) => string;
     error: (rowKey: string, colId: string) => string;
   };
+}
+
+/** PlusTableColumnSettings 对宿主暴露的能力 */
+export interface ColumnSettingsExpose {
+  openDrawer: () => void;
 }
 
 /** 共享原语：各子 store 通过上下文读取，不再经 table.store 反向互访。 */

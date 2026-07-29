@@ -5,6 +5,10 @@ vi.mock('../../table-column-settings/index.vue', () => ({
   default: { name: 'PlusTableColumnSettings', render: () => null },
 }));
 
+vi.mock('../../table-context-menu/index.vue', () => ({
+  default: { name: 'PlusTableContextMenu', render: () => null },
+}));
+
 vi.mock('../../table-column', () => ({
   default: { name: 'PlusTableColumnNode', render: () => null },
 }));
@@ -111,9 +115,21 @@ describe('PlusTable title / summary slots', () => {
   it('hides title / summary wrappers when slots are absent', async () => {
     const host = await mount({}, { total: 10 });
 
+    expect(host.querySelector('.plus-table__header')).toBeNull();
     expect(host.querySelector('.plus-table__title')).toBeNull();
     expect(host.querySelector('.plus-table__summary')).toBeNull();
     expect(host.querySelector('.plus-table__footer')).toBeTruthy();
     expect(host.querySelector('.plus-table__pagination')).toBeTruthy();
+  });
+
+  it('shows header when only toolbar is provided', async () => {
+    const host = await mount({
+      toolbar: () => h('button', '新增'),
+    });
+
+    const header = host.querySelector('.plus-table__header');
+    expect(header).toBeTruthy();
+    expect(header!.querySelector('.plus-table__title')).toBeNull();
+    expect(header!.querySelector('.plus-table__toolbar')).toBeTruthy();
   });
 });

@@ -45,6 +45,8 @@ export function createTestTable<T extends RowData>(
     slots: {} as Slots,
     gridRef: shallowRef<HTMLElement>(),
     paginationRef: shallowRef<HTMLElement>(),
+    columnSettingsRef: shallowRef(),
+    contextMenuRef: shallowRef(),
     ids: {
       description: 'test-description',
       cell: (rowKey: string, colId: string) => `cell-${rowKey}-${colId}`,

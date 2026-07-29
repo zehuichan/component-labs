@@ -69,6 +69,30 @@ export interface HotkeyBinding<T extends RowData = RowData> {
   override?: boolean;
 }
 
+/** 表体右键菜单回调上下文 */
+export interface ContextMenuContext<T extends RowData = RowData> {
+  event: MouseEvent;
+  row: T;
+  rowIndex: number;
+  /** 特殊列为 -1 */
+  colIndex: number;
+  prop: string | undefined;
+  column: PlusTableColumn<T> | null;
+  data: T[];
+}
+
+export interface ContextMenuItem<T extends RowData = RowData> {
+  /** 唯一标识；缺省时用 label + 下标兜底 */
+  key?: string;
+  label: string;
+  /** 返回 false 则整项不渲染 */
+  when?: (ctx: ContextMenuContext<T>) => boolean;
+  disabled?: boolean | ((ctx: ContextMenuContext<T>) => boolean);
+  /** 该项之后画分隔线 */
+  separator?: boolean;
+  handler: (ctx: ContextMenuContext<T>) => void;
+}
+
 export interface CellChangePayload<T extends RowData = RowData> {
   row: T;
   rowIndex: number;
@@ -123,6 +147,10 @@ export interface PlusTableProps<T extends RowData = RowData> {
   hotkeys?: HotkeyBinding<T>[];
   /** 自定义热键总开关，不影响内置键盘导航 */
   hotkeyEnabled?: boolean;
+  /** 表体自定义右键菜单；不传或解析为空则保留浏览器原生菜单 */
+  contextMenu?: ContextMenuItem<T>[] | ((ctx: ContextMenuContext<T>) => ContextMenuItem<T>[]);
+  /** 右键菜单总开关，默认 true；false 时表头菜单也不弹 */
+  contextMenuEnabled?: boolean;
 }
 
 /**
@@ -141,6 +169,7 @@ export const DEFAULT_PROPS = {
   history: false,
   dirtyTracking: false,
   hotkeyEnabled: true,
+  contextMenuEnabled: true,
 };
 
 export interface PlusTableEmits<T extends RowData = RowData> {

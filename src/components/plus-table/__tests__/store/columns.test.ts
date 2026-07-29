@@ -494,4 +494,67 @@ describe('PlusTable columns', () => {
     expect(() => store.setColumnWidth('a', 0)).toThrow(/有限正数/);
     expect(store.states.columns.value.map((node) => node.id)).toEqual(['a']);
   });
+
+  it('persists an explicit auto override that outranks the configured width', () => {
+    const key = 'plus-table:settings:auto-width';
+    const { store } = setup([{ prop: 'a', label: 'A', width: 140 }], {
+      cache: true,
+      id: 'auto-width',
+    });
+
+    store.setColumnWidth('a', null);
+
+    // 缺 key = 回落列配置；key 存在但为 null = 强制自动，两者必须可区分
+    expect(store.states.widthMap.value).toEqual({ a: null });
+    expect('a' in store.states.widthMap.value).toBe(true);
+    expect(JSON.parse(localStorage.getItem(key)!).widths).toEqual({ a: null });
+
+    store.clearColumnWidth('a');
+    expect(store.states.widthMap.value).toEqual({});
+  });
+
+  it('reloads an explicit auto override from the cache', () => {
+    localStorage.setItem(
+      'plus-table:settings:auto-width-reload',
+      JSON.stringify({ hidden: [], order: {}, widths: { a: null } }),
+    );
+
+    const { store } = setup([{ prop: 'a', label: 'A', width: 140 }], {
+      cache: true,
+      id: 'auto-width-reload',
+    });
+
+    expect(store.states.widthMap.value).toEqual({ a: null });
+  });
+
+  it('drops the width override so the column falls back to auto width', () => {
+    const key = 'plus-table:settings:clear-width';
+    const { store } = setup(
+      [
+        { prop: 'a', label: 'A' },
+        { prop: 'b', label: 'B', width: 90 },
+      ],
+      { cache: true, id: 'clear-width' },
+    );
+    store.setColumnWidth('a', 160);
+    store.setColumnWidth('b', 200);
+
+    store.clearColumnWidth('a');
+
+    expect(store.states.widthMap.value).toEqual({ b: 200 });
+    expect(JSON.parse(localStorage.getItem(key)!).widths).toEqual({ b: 200 });
+
+    // 列配置里的 width 不受覆盖层影响，清除后仍是列自己的宽度
+    store.clearColumnWidth('b');
+    expect(store.states.widthMap.value).toEqual({});
+    expect(store.getColumnById('b')?.column.width).toBe(90);
+  });
+
+  it('rejects clearing an unknown column and no-ops without an override', () => {
+    const { store } = setup([{ prop: 'a', label: 'A' }]);
+
+    expect(() => store.clearColumnWidth('missing')).toThrow(/未知列/);
+    expect(() => store.clearColumnWidth('a')).not.toThrow();
+    expect(store.states.widthMap.value).toEqual({});
+  });
 });

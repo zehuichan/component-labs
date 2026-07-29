@@ -30,6 +30,8 @@ export type {
   CellChangePayload,
   CellError,
   CellRule,
+  ContextMenuContext,
+  ContextMenuItem,
   EditMode,
   HotkeyBinding,
   HotkeyContext,

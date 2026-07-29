@@ -105,6 +105,16 @@ defineOptions({ name: 'ApiOverview' });
           <td><code>boolean</code></td>
           <td>默认 <code>true</code>。自定义热键总开关。</td>
         </tr>
+        <tr>
+          <td><code>context-menu</code></td>
+          <td><code>ContextMenuItem[] | (ctx) =&gt; ContextMenuItem[]</code></td>
+          <td>表体自定义右键菜单；不传或解析为空则保留浏览器原生菜单。</td>
+        </tr>
+        <tr>
+          <td><code>context-menu-enabled</code></td>
+          <td><code>boolean</code></td>
+          <td>默认 <code>true</code>。右键菜单总开关（含表头内置菜单）。</td>
+        </tr>
       </DemoApiTable>
 
       <DemoApiTable title="Events" :headers="['名称', '载荷', '说明']">
@@ -133,11 +143,11 @@ defineOptions({ name: 'ApiOverview' });
       <DemoApiTable title="Slots" :headers="['名称', '说明']">
         <tr>
           <td><code>#title</code></td>
-          <td>顶栏左侧标题区，与 toolbar / 列设置同一行。</td>
+          <td>顶栏左侧标题区，与 toolbar 同一行（有 title 或 toolbar 时显示顶栏）。</td>
         </tr>
         <tr>
           <td><code>#toolbar</code></td>
-          <td>顶栏工具区（列设置按钮在其右侧）。</td>
+          <td>顶栏工具区。列设置改为表头右键（隐藏 / 设置）。</td>
         </tr>
         <tr>
           <td><code>#summary</code></td>
@@ -233,8 +243,15 @@ defineOptions({ name: 'ApiOverview' });
         </tr>
         <tr>
           <td><code>setColumnWidth</code></td>
-          <td><code>(prop, width) =&gt; void</code></td>
-          <td>设置列宽。</td>
+          <td><code>(prop, width: number | null) =&gt; void</code></td>
+          <td>
+            设置列宽；传 <code>null</code> 为强制自动宽度，会压过列配置里的 <code>width</code>。
+          </td>
+        </tr>
+        <tr>
+          <td><code>clearColumnWidth</code></td>
+          <td><code>(prop) =&gt; void</code></td>
+          <td>撤掉列宽覆盖，回到列配置的 <code>width</code>；未配置则由 el-table 自动分配。</td>
         </tr>
       </DemoApiTable>
 

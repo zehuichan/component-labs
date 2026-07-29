@@ -9,11 +9,12 @@ import { useEvents } from './table/events-helper';
 import { useKeyboard } from './table/keyboard-helper';
 import { useStyle } from './table/style-helper';
 import PlusTableColumnSettings from './table-column-settings/index.vue';
+import PlusTableContextMenu from './table-context-menu/index.vue';
 import PlusTableColumnNode from './table-column';
 import { DEFAULT_PROPS } from './table/defaults';
 import type { TableInstance } from 'element-plus';
 import type { PlusTable } from './tokens';
-import type { TableHost } from './store/context';
+import type { ColumnSettingsExpose, ContextMenuExpose, TableHost } from './store/context';
 import type { EditorSlotProps, HeaderSlotProps } from './table-cell/render-helper';
 import type { PlusTableEmits, PlusTableProps, RowData } from './table/defaults';
 import type { CellContext } from './table-column/defaults';
@@ -58,6 +59,8 @@ const ids = {
 const gridRef = ref<HTMLElement>();
 const paginationRef = ref<HTMLElement>();
 const tableRef = ref<TableInstance>();
+const columnSettingsRef = ref<ColumnSettingsExpose>();
+const contextMenuRef = ref<ContextMenuExpose>();
 
 const host: TableHost<T> = {
   props,
@@ -65,6 +68,8 @@ const host: TableHost<T> = {
   slots,
   gridRef,
   paginationRef,
+  columnSettingsRef,
+  contextMenuRef,
   ids,
 };
 const store = createStore<T>(host);
@@ -91,6 +96,8 @@ const paginationEnabled = computed(() => props.total !== undefined);
 
 const footerEnabled = computed(() => !!slots.summary || paginationEnabled.value);
 
+const headerEnabled = computed(() => !!slots.title || !!slots.toolbar);
+
 defineExpose(
   createTableExpose(
     {
@@ -115,6 +122,7 @@ defineExpose(
       /** 列设置 */
       resetColumnSettings: store.resetSettings,
       setColumnWidth: store.setColumnWidth,
+      clearColumnWidth: store.clearColumnWidth,
       /** 撤销重做（history prop 关闭时栈恒为空，undo/redo 为安全空操作） */
       undo: store.undo,
       redo: store.redo,
@@ -136,13 +144,12 @@ defineExpose(
 
 <template>
   <div class="plus-table" :class="{ 'plus-table--adaptive-container': isAdaptiveContainer }">
-    <div class="plus-table__header">
+    <div v-if="headerEnabled" class="plus-table__header">
       <div v-if="$slots.title" class="plus-table__title">
         <slot name="title" />
       </div>
-      <div class="plus-table__toolbar">
+      <div v-if="$slots.toolbar" class="plus-table__toolbar">
         <slot name="toolbar" />
-        <PlusTableColumnSettings />
       </div>
     </div>
 
@@ -165,7 +172,9 @@ defineExpose(
         v-bind="$attrs"
         @cell-click="events.handleCellClick"
         @cell-dblclick="events.handleCellDblclick"
+        @cell-contextmenu="events.handleCellContextmenu"
         @header-dragend="events.handleHeaderDragend"
+        @header-contextmenu="events.handleHeaderContextmenu"
       >
         <PlusTableColumnNode
           v-for="(node, index) in displayTree"
@@ -195,5 +204,8 @@ defineExpose(
         />
       </div>
     </div>
+
+    <PlusTableColumnSettings ref="columnSettingsRef" />
+    <PlusTableContextMenu ref="contextMenuRef" />
   </div>
 </template>
