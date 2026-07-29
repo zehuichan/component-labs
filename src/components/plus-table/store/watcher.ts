@@ -27,6 +27,28 @@ export type { CellLocation, RowLocation } from './context';
 const TABLE_MODE_EDITOR_LIMIT = 2000;
 
 /**
+ * 装配期自检：子 store 是扁平合并成一个 store 的，同名成员只会剩下最后一个，
+ * TypeScript 对展开里的重名不报错，漏掉就是运行期静默失效。开发期直接拦住。
+ */
+function assertDisjointKeys(scope: string, parts: readonly object[]): void {
+  if (!(import.meta as any)?.env?.DEV) return;
+  const owners = new Map<string, number>();
+  parts.forEach((part, index) => {
+    for (const key of Object.keys(part)) {
+      // 每个子 store 都带自己的 states，合并后由外层显式重建，不算冲突
+      if (key === 'states') continue;
+      const owner = owners.get(key);
+      if (owner !== undefined) {
+        throw new Error(
+          `[PlusTable] 内部错误：${scope} 第 ${owner} 与第 ${index} 个来源都定义了 "${key}"，扁平合并会静默覆盖其中之一。`,
+        );
+      }
+      owners.set(key, index);
+    }
+  });
+}
+
+/**
  * 装配层：先建共享原语（core），再按依赖顺序注入各子 store。
  * 子 store 之间只通过显式参数互访，不再回读 table.store，装配期不存在环。
  */
@@ -137,6 +159,9 @@ export function useWatcher<T extends RowData = RowData>(host: TableHost<T>) {
     validateRow: validation.validateRow,
     clearRowValidate: validation.clearRowValidate,
     markDirty: dirty.markDirty,
+    historyPushCount: history.getPushCount,
+    dropRecentRowChanges: history.dropRecentRowChanges,
+    withHistoryBatch: history.withHistoryBatch,
     setCellValue,
     writeRowField,
     deleteRowField,
@@ -218,13 +243,37 @@ export function useWatcher<T extends RowData = RowData>(host: TableHost<T>) {
     { deep: true, flush: 'sync' },
   );
 
-  return {
+  const own = {
     core,
     getRowKey,
     locateCell,
     locateCellRef,
     getCurrentCellLocation,
     rowLifecycle,
+  };
+
+  assertDisjointKeys('store 成员', [
+    own,
+    columns,
+    current,
+    dependencies,
+    history,
+    dirty,
+    validation,
+    editing,
+    rows,
+  ]);
+  assertDisjointKeys('store.states', [
+    states,
+    columns.states,
+    current.states,
+    history.states,
+    dirty.states,
+    editing.states,
+  ]);
+
+  return {
+    ...own,
     ...columns,
     ...current,
     ...dependencies,

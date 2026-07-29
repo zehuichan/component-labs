@@ -235,8 +235,10 @@ export function useValidation<T extends RowData = RowData>(
   async function validateStableRow(row: T): Promise<CellError[]> {
     let results: CellValidationResult[] = [];
     for (let attempt = 0; attempt <= MAX_STALE_RETRIES; attempt++) {
-      const currentIndex = core.states.data.value.indexOf(row);
-      if (currentIndex < 0) return [];
+      const currentIndex = core.states.keysMap.value.get(core.getRowKey(row))?.rowIndex;
+      if (currentIndex === undefined || core.states.data.value[currentIndex] !== row) {
+        return [];
+      }
       const props = new Set(
         deps.allColumns.value
           .map((node: ColumnNode<T>) => node.column.prop)

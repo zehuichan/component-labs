@@ -143,6 +143,92 @@ describe('PlusTable row editing session', () => {
     expect(store.isRowEditing(rows[0]!)).toBe(false);
   });
 
+  it('drops session history on cancel so redo cannot resurrect the edit', () => {
+    const testTable = createTestTable<Row>({
+      data: [
+        { id: 1, name: 'one', amount: 100 },
+        { id: 2, name: 'two', amount: 20 },
+      ],
+      columns: [
+        { prop: 'name', label: '名称', editable: true },
+        { prop: 'amount', label: '金额', editable: true },
+      ],
+      mode: 'row',
+      history: true,
+    });
+    tables.push(testTable);
+    const { store } = testTable;
+    const row = store.states.data.value[0]!;
+
+    expect(store.startRowEdit(0)).toBe(true);
+    store.setCellValue(row, 0, 'amount', 500);
+    store.cancelRowEdit(0);
+
+    expect(row.amount).toBe(100);
+    expect(store.canUndo.value).toBe(false);
+    expect(store.canRedo.value).toBe(false);
+    store.redo();
+    expect(row.amount).toBe(100);
+  });
+
+  it('batches a row commit into a single undo entry', async () => {
+    const testTable = createTestTable<Row>({
+      data: [
+        { id: 1, name: 'one', amount: 10 },
+        { id: 2, name: 'two', amount: 20 },
+      ],
+      columns: [
+        { prop: 'name', label: '名称', editable: true },
+        { prop: 'amount', label: '金额', editable: true },
+      ],
+      mode: 'row',
+      history: true,
+    });
+    tables.push(testTable);
+    const { store } = testTable;
+    const row = store.states.data.value[0]!;
+
+    expect(store.startRowEdit(0)).toBe(true);
+    store.setDraft('1', 'name', 'edited');
+    store.setDraft('1', 'amount', 99);
+    await expect(store.commitRowEdit(0)).resolves.toBe(true);
+
+    expect(row).toMatchObject({ name: 'edited', amount: 99 });
+    store.undo();
+    expect(row).toMatchObject({ name: 'one', amount: 10 });
+    expect(store.canUndo.value).toBe(false);
+  });
+
+  it('discards a buffered draft when the same field is written elsewhere', () => {
+    const testTable = createTestTable<Row>({
+      data: [{ id: 1, name: 'one', amount: 100 }],
+      columns: [
+        { prop: 'name', label: '名称', editable: true },
+        { prop: 'amount', label: '金额', editable: true },
+      ],
+      mode: 'table',
+      history: true,
+    });
+    tables.push(testTable);
+    const { store } = testTable;
+    const row = store.states.data.value[0]!;
+
+    store.setDraft('1', 'amount', 999);
+    store.setCellValue(row, 0, 'amount', 7000);
+    expect(store.getDraft('1', 'amount').has).toBe(false);
+
+    store.flushDraft(row, 0, '1', 'amount');
+    expect(row.amount).toBe(7000);
+
+    store.setDraft('1', 'amount', 777);
+    store.setCellValue(row, 0, 'amount', 200);
+    store.undo();
+    expect(row.amount).toBe(7000);
+    expect(store.getDraft('1', 'amount').has).toBe(false);
+    store.flushDraft(row, 0, '1', 'amount');
+    expect(row.amount).toBe(7000);
+  });
+
   it('keeps failed validation inside the editing session', async () => {
     const { store } = setup({
       validator: async () => {

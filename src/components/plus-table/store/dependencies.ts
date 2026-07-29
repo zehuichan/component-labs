@@ -1,6 +1,7 @@
+import { computed, shallowRef } from 'vue';
 import { isBoolean, isFunction, isPlainObject, isString } from 'es-toolkit';
 import { isSpecialColumn } from '../util';
-import type { ComputedRef } from 'vue';
+import type { ComputedRef, ShallowRef } from 'vue';
 import type { SetCellValueCommand, TableCoreContext } from './context';
 import type { CellRule, RowData } from '../table/defaults';
 import type { ColumnNode, DependencyApi, PlusTableColumn } from '../table-column/defaults';
@@ -71,23 +72,10 @@ function isSameRules(a: CellRule[] | null, b: CellRule[] | null): boolean {
   return a.every((rule, index) => rule === b[index]);
 }
 
-function isSameSignature(a: readonly unknown[], b: readonly unknown[]): boolean {
-  return a.length === b.length && a.every((value, index) => Object.is(value, b[index]));
-}
-
 export interface DependencyDeps<T extends RowData = RowData> {
   /** 触发字段反向索引：字段名 → 声明依赖了该字段的叶子数据列（含被列设置隐藏的列） */
   triggerIndex: ComputedRef<ReadonlyMap<string, readonly ColumnNode<T>[]>>;
   setCellValue: SetCellValueCommand<T>;
-}
-
-interface DependencyCacheEntry<T extends RowData = RowData> {
-  row: T;
-  rowIndex: number;
-  generation: number;
-  /** 声明的 triggerFields 在本次计算时的取值 */
-  signature: unknown[];
-  state: DependencyState;
 }
 
 export function useDependencies<T extends RowData = RowData>(
@@ -96,15 +84,31 @@ export function useDependencies<T extends RowData = RowData>(
 ) {
   /**
    * rowKey → 联动代数。任何经写契约落到该行的字段写入都会推进代数，
-   * 让该行已缓存的联动状态整体作废（覆盖回调读取了 triggerFields 之外同行字段的情况）。
+   * 让该行已缓存的联动状态整体作废（覆盖回调读取了 triggerFields 之外同行字段的情况，
+   * 以及父级传入非响应式行对象、字段写入本身不产生依赖通知的情况）。
    */
-  const generations = new Map<string, number>();
-  /** rowKey → colId → 上一次算出的联动状态及其签名 */
-  const cache = new Map<string, Map<string, DependencyCacheEntry<T>>>();
+  const generations = new Map<string, ShallowRef<number>>();
+  /**
+   * rowKey → colId → 该格联动状态的 computed。
+   *
+   * 缓存的是 computed 而不是算好的值：回调是业务侧任意函数，除 triggerFields 外还可能读
+   * 别的响应式源（下拉选项 ref、另一行数据等）。由 computed 自己持有依赖集，渲染副作用与
+   * 异步校验谁先访问都能拿到正确追踪的结果，不会出现「先算的那一方决定了谁能收到更新」。
+   */
+  const cache = new Map<string, Map<string, ComputedRef<DependencyState>>>();
+
+  function generationRef(rowKey: string): ShallowRef<number> {
+    let generation = generations.get(rowKey);
+    if (!generation) {
+      generation = shallowRef(0);
+      generations.set(rowKey, generation);
+    }
+    return generation;
+  }
 
   /** 行字段实际写入后调用，使该行联动缓存失效 */
   function bumpDependencyGeneration(rowKey: string): void {
-    generations.set(rowKey, (generations.get(rowKey) ?? 0) + 1);
+    generationRef(rowKey).value += 1;
   }
 
   /** 数据行身份失效时调用：连同代数一起丢弃，新行不会命中旧行缓存。 */
@@ -182,35 +186,34 @@ export function useDependencies<T extends RowData = RowData>(
   /**
    * 渲染 / 校验时取当前联动状态。
    *
-   * 缓存签名 =（行对象 + 行下标 + 该行联动代数 + 声明的 triggerFields 取值）。
-   * triggerFields 每次都从行上现读：既是签名，也让调用方的渲染副作用继续追踪这些
-   * 字段的响应式变化——「只有 triggerFields 变动才影响本列」本就是 ColumnDependencies 的约定。
+   * 条目只按 (rowKey, colId) 建一次：行对象与行下标在 computed 内部按 rowKey 现查，
+   * 换页 / 重排不必重建 computed，也不会把旧行引用留在缓存里。
    */
   function getDependencyState(row: T, rowIndex: number, node: ColumnNode<T>): DependencyState {
     const column = node.column;
-    const dep = column.dependencies;
-    if (!dep) return EMPTY_STATE;
+    if (!column.dependencies) return EMPTY_STATE;
     const rowKey = core.getRowKey(row);
-    const generation = generations.get(rowKey) ?? 0;
-    const signature = dep.triggerFields.map((field) => row[field]);
+    // 游离行引用（已被移出当前数据）直接算一次即返回：不建缓存，免得同 rowKey 的新行命中旧结果
+    const resident = core.states.keysMap.value.get(rowKey);
+    if (resident?.row !== row) return computeState(row, rowIndex, column, undefined);
+
     let rowCache = cache.get(rowKey);
-    const cached = rowCache?.get(node.id);
-    if (
-      cached &&
-      cached.row === row &&
-      cached.rowIndex === rowIndex &&
-      cached.generation === generation &&
-      isSameSignature(cached.signature, signature)
-    ) {
-      return cached.state;
+    let state = rowCache?.get(node.id);
+    if (!state) {
+      const generation = generationRef(rowKey);
+      state = computed<DependencyState>((previous) => {
+        void generation.value;
+        const location = core.states.keysMap.value.get(rowKey);
+        if (!location) return EMPTY_STATE;
+        return computeState(location.row, location.rowIndex, column, previous);
+      });
+      if (!rowCache) {
+        rowCache = new Map();
+        cache.set(rowKey, rowCache);
+      }
+      rowCache.set(node.id, state);
     }
-    const state = computeState(row, rowIndex, column, cached?.state);
-    if (!rowCache) {
-      rowCache = new Map();
-      cache.set(rowKey, rowCache);
-    }
-    rowCache.set(node.id, { row, rowIndex, generation, signature, state });
-    return state;
+    return state.value;
   }
 
   /** 当前同步触发链中已处理的 rowKey -> props，防止 trigger 互相 setValue 造成死循环 */

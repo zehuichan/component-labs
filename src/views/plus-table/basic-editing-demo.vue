@@ -174,7 +174,11 @@ function handleCellDblclick(row: Row) {
         <tr>
           <td><code>data</code> / <code>v-model:data</code></td>
           <td><code>T[]</code></td>
-          <td>必填。表格数据；编辑经 <code>update:data</code> 回写。</td>
+          <td>
+            必填。表格数据；字段编辑就地修改行对象（经
+            <code>cell-change</code> 通知），行结构变更（插入/删除/移动）才经
+            <code>update:data</code> 回写新数组。
+          </td>
         </tr>
         <tr>
           <td><code>columns</code></td>

@@ -228,6 +228,10 @@ export function useKeyboard<T extends RowData = RowData>(table: PlusTable<T>) {
       const cell = table.store.getCurrentCellLocation();
       if (mode === 'row' && cell && table.store.isRowEditing(cell.row)) {
         table.store.cancelRowEdit(cell.rowIndex);
+      } else if (mode === 'table' && cell?.prop) {
+        // table 模式 Escape：丢掉当前格未提交草稿再交回网格，语义与 cell/row 的「取消」一致；
+        // 不先丢草稿的话，焦点离开编辑器会走 onBlur → flushDraft，等于把取消变成提交。
+        table.store.discardDraft(cell.rowKey, cell.prop);
       }
       table.store.focusGrid();
       event.preventDefault();

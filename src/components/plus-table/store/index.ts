@@ -68,21 +68,37 @@ function useStore<T extends RowData = RowData>(host: TableHost<T>) {
   /**
    * 单元格写值流水线：写回行对象 → 历史 / 脏追踪 → cell-change → 联动 trigger → 按需校验。
    * 所有编辑路径（cell 提交 / row·table 直绑 / Delete 清空 / 联动 setValue / 自定义热键 setValue）统一走这里。
+   * 公开事件与联动一律用 keysMap 解析出的最新下标；调用方传入的 rowIndex 只作提示，不再原样透传。
    */
-  function setCellValue(row: T, rowIndex: number, prop: string, value: unknown) {
+  function setCellValue(row: T, _rowIndex: number, prop: string, value: unknown) {
     // 同值写入提前退出，避免为一次空写建立脏基线快照；writeRowField 内部同样会兜底
     if (Object.is(row[prop], value)) return;
     const rowKey = watcher.getRowKey(row);
+    const location = watcher.states.keysMap.value.get(rowKey);
+    // 行已不在当前数据里（换页 / remove 后仍持有旧闭包）：静默丢弃，不写也不 emit
+    if (location?.row !== row) return;
+    const rowIndex = location.rowIndex;
     // 必须在写值之前建基线，否则行的第一次编辑会把基线拍成修改后的值，永远测不出脏
     watcher.touchRow(row, rowKey);
     const { wrote, oldValue } = writeField(row, prop, value);
     if (!wrote) return;
-    watcher.pushChange({ rowKey, prop, oldValue, newValue: value });
-    watcher.markDirty(rowKey, prop);
-    host.emit('cell-change', { row, rowIndex, prop, value, oldValue });
-    watcher.notifyFieldChange(row, rowIndex, prop);
+    // 写契约是唯一真相：任何经流水线落地的值都让同字段草稿作废，避免失焦把旧缓冲盖回来
+    watcher.discardDraft(rowKey, prop);
+    // 主写入与联动级联并成一个原子撤销单元：用户看到的是一次编辑
+    watcher.withHistoryBatch(() => {
+      watcher.pushChange({ rowKey, prop, oldValue, newValue: value });
+      watcher.markDirty(rowKey, prop);
+      host.emit('cell-change', { row, rowIndex, prop, value, oldValue });
+      watcher.notifyFieldChange(row, rowIndex, prop);
+    });
     if (watcher.states.validateEvent.value) {
-      void watcher.validateCell(row, rowIndex, prop);
+      void watcher.validateCell(row, rowIndex, prop).catch((error) => {
+        if (error instanceof RangeError) {
+          // 校验发起后行身份已失效：丢掉结果即可，不必冒泡成未处理拒绝
+          return;
+        }
+        console.error('[PlusTable] validateCell 失败：', error);
+      });
     }
   }
 
@@ -94,6 +110,7 @@ function useStore<T extends RowData = RowData>(host: TableHost<T>) {
    * 不重新触发 dependencies.trigger，避免联动副作用在历史回放时被重复执行 */
   function applyHistoryChanges(applied: AppliedHistoryChange<T>[], direction: 'undo' | 'redo') {
     for (const change of applied) {
+      watcher.discardDraft(change.rowKey, change.prop);
       watcher.markDirty(change.rowKey, change.prop);
       const value = direction === 'undo' ? change.oldValue : change.newValue;
       const oldValue = direction === 'undo' ? change.newValue : change.oldValue;
@@ -105,7 +122,10 @@ function useStore<T extends RowData = RowData>(host: TableHost<T>) {
         oldValue,
       });
       if (watcher.states.validateEvent.value) {
-        void watcher.validateCell(change.row, change.rowIndex, change.prop);
+        void watcher.validateCell(change.row, change.rowIndex, change.prop).catch((error) => {
+          if (error instanceof RangeError) return;
+          console.error('[PlusTable] validateCell 失败：', error);
+        });
       }
     }
   }
@@ -218,6 +238,11 @@ type PublicStoreKey =
   | 'moveRow'
   | 'duplicateRow';
 
+/**
+ * 公开状态白名单。可写的 undo / redo / dirty 内部结构与 `_columns` 不外泄，
+ * 调用方只能经对应 API 改状态；`data` 仍以 ShallowRef 形式暴露给渲染绑定，
+ * 写入请走 setData / 行结构 API，不要直接赋值。
+ */
 type PublicStateKey =
   | 'data'
   | 'rowKey'
@@ -227,16 +252,12 @@ type PublicStateKey =
   | 'dirtyTracking'
   | 'keysMap'
   | 'rowKeyMap'
-  | '_columns'
   | 'hiddenIds'
   | 'orderMap'
   | 'widthMap'
   | 'originColumns'
   | 'columns'
   | 'allColumns'
-  | 'undoStack'
-  | 'redoStack'
-  | 'dirtyCells'
   | 'editingRowKey';
 
 /** 对外维持原有 index-based Store 形态，稳定 CellRef 相关成员仅供组件内部使用。 */

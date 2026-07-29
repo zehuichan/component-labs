@@ -175,7 +175,7 @@ describe('PlusTable dependencies', () => {
     expect(store.getDependencyState(row, 0, node)).toBe(state);
   });
 
-  it('caches by row, row index, generation and declared trigger fields', () => {
+  it('caches by row identity and generation; rowIndex argument is ignored for residents', () => {
     const componentProps = vi.fn((row: Row) => ({ options: OPTION_SETS[row.a] ?? [] }));
     const { store } = setup([
       { prop: 'a', label: 'A' },
@@ -188,23 +188,21 @@ describe('PlusTable dependencies', () => {
     expect(store.getDependencyState(row, 0, node)).toBe(first);
     expect(componentProps).toHaveBeenCalledTimes(1);
 
-    // 行下标变化算未命中；重算结果等价时仍复用同一份引用
-    store.getDependencyState(row, 1, node);
-    expect(componentProps).toHaveBeenCalledTimes(2);
-    expect(store.getDependencyState(row, 0, node)).toBe(first);
-    expect(componentProps).toHaveBeenCalledTimes(3);
+    // 调用方传入的 rowIndex 只是提示：在册行一律按 keysMap 现查，不算未命中
+    expect(store.getDependencyState(row, 1, node)).toBe(first);
+    expect(componentProps).toHaveBeenCalledTimes(1);
 
     // 声明的触发字段变了：重算且换新状态
     store.setCellValue(row, 0, 'a', 'x');
     const afterTriggerField = store.getDependencyState(row, 0, node);
-    expect(componentProps).toHaveBeenCalledTimes(4);
+    expect(componentProps).toHaveBeenCalledTimes(2);
     expect(afterTriggerField).not.toBe(first);
     expect(afterTriggerField.componentProps).toEqual({ options: ['x-1', 'x-2'] });
 
     // 同行其他字段写入推进代数：重算，但等价结果保持引用稳定
     store.setCellValue(row, 0, 'd', 'noise');
     const afterOtherField = store.getDependencyState(row, 0, node);
-    expect(componentProps).toHaveBeenCalledTimes(5);
+    expect(componentProps).toHaveBeenCalledTimes(3);
     expect(afterOtherField).toBe(afterTriggerField);
     expect(afterOtherField.componentProps).toBe(afterTriggerField.componentProps);
   });

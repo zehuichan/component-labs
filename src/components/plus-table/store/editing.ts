@@ -26,6 +26,10 @@ export interface EditingDeps<T extends RowData = RowData> {
   validateRow: (rowIndex: number) => Promise<CellError[]>;
   clearRowValidate: (row: T) => void;
   markDirty: (rowKey: string, prop: string) => void;
+  /** 已入栈的历史条目数：行编辑会话取消时用来定位该回滚哪一段 */
+  historyPushCount: () => number;
+  dropRecentRowChanges: (rowKey: string, count: number) => void;
+  withHistoryBatch: <R>(run: () => R) => R;
   setCellValue: SetCellValueCommand<T>;
   writeRowField: WriteRowFieldCommand<T>;
   deleteRowField: DeleteRowFieldCommand<T>;
@@ -68,6 +72,8 @@ export function useEditing<T extends RowData = RowData>(
    * 提交就作废——比对纪元即可，无需为整行做深拷贝快照再深比较。
    */
   let editingSessionEpoch = 0;
+  /** 行编辑会话开始时的历史入栈计数：取消编辑要连会话期间产生的历史一起撤掉 */
+  let editingRowHistoryMark = 0;
 
   /** 统一草稿仓：cell 模式单槽、row/table 模式多槽，共用同一存储与结构化寻址方式 */
   const drafts = reactive(new Map<string, Map<string, unknown>>());
@@ -157,11 +163,20 @@ export function useEditing<T extends RowData = RowData>(
     deps.setCellValue(row, rowIndex, prop, draft.value);
   }
 
+  /**
+   * 写入流水线在该字段落值后调用：草稿只是输入缓冲，任何经写契约生效的写入（联动 trigger、
+   * 撤销重做、程序化 setCellValue）都让它作废，否则失焦时会用早已过期的缓冲覆盖掉新值。
+   */
+  function discardDraft(rowKey: string, prop: string): void {
+    deleteDraft(rowKey, prop);
+  }
+
   /** 丢弃某行所有未提交的草稿（row 模式取消编辑 / 行被删除时调用，不写回） */
   function discardDraftsForRow(rowKey: string): void {
     if (drafts.delete(rowKey)) bumpSessionEpochFor(rowKey);
   }
 
+  /** 一次行提交在用户眼里是一个动作，多字段写回并成一条历史，撤销一步回到提交前 */
   function flushRowDrafts(rowKey: string): void {
     bumpSessionEpochFor(rowKey);
     const found = coreStates.keysMap.value.get(rowKey);
@@ -170,9 +185,12 @@ export function useEditing<T extends RowData = RowData>(
       return;
     }
     const props = [...(drafts.get(rowKey)?.keys() ?? [])];
-    for (const prop of props) {
-      flushDraft(found.row, found.rowIndex, rowKey, prop);
-    }
+    if (props.length === 0) return;
+    deps.withHistoryBatch(() => {
+      for (const prop of props) {
+        flushDraft(found.row, found.rowIndex, rowKey, prop);
+      }
+    });
   }
 
   function endEditingRowSession(): void {
@@ -329,6 +347,8 @@ export function useEditing<T extends RowData = RowData>(
     const key = core.getRowKey(row);
     if (states.editingRowKey.value === key) return true;
     clearEditingRow(true);
+    // 上一行的提交历史已经入栈，标记要在其之后取，取消本行只回滚本会话
+    editingRowHistoryMark = deps.historyPushCount();
     editingRowSnapshot = cloneDeep(row);
     states.editingRowKey.value = key;
     bumpSessionEpoch();
@@ -368,6 +388,8 @@ export function useEditing<T extends RowData = RowData>(
     setEditingCell(null);
     // 未提交的草稿本来就没写进 row，直接丢弃即可；不能 flush，否则等于强行提交取消中的编辑
     discardDraftsForRow(key);
+    // 取消是历史边界：会话期间已入栈的变更必须一并丢掉，否则 redo 能把取消掉的编辑复活
+    deps.dropRecentRowChanges(key, deps.historyPushCount() - editingRowHistoryMark);
     const dirtyProps = new Set(Object.keys(row));
     const snapshot = editingRowSnapshot;
     if (snapshot) {
@@ -404,6 +426,7 @@ export function useEditing<T extends RowData = RowData>(
     getDraft,
     setDraft,
     flushDraft,
+    discardDraft,
     discardDraftsForRow,
     invalidateEditingRow,
     states,
