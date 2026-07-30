@@ -112,7 +112,10 @@ defineOptions({ name: 'ApiOverview' });
         <tr>
           <td><code>context-menu</code></td>
           <td><code>ContextMenuItem[] | (ctx) =&gt; ContextMenuItem[]</code></td>
-          <td>表体自定义右键菜单；不传或解析为空则保留浏览器原生菜单。</td>
+          <td>
+            表体自定义右键菜单；不传或解析为空则保留浏览器原生菜单。项内容可用
+            <code>#context-menu-item-${'{key}'}</code> 插槽自定义。
+          </td>
         </tr>
         <tr>
           <td><code>context-menu-enabled</code></td>
@@ -180,6 +183,14 @@ defineOptions({ name: 'ApiOverview' });
           <td>
             编辑态插槽；参数含
             <code>value</code> / <code>setValue</code> / <code>commit</code> / <code>cancel</code>。
+          </td>
+        </tr>
+        <tr>
+          <td><code>#context-menu-item-&#123;key&#125;</code></td>
+          <td>
+            右键菜单项自定义内容；参数为
+            <code>ContextMenuItemSlotProps</code>（含 <code>close</code>，对齐 editor 的
+            commit/cancel）。
           </td>
         </tr>
       </DemoApiTable>

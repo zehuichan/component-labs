@@ -608,6 +608,12 @@
       color: var(--el-text-color-disabled);
       cursor: not-allowed;
     }
+
+    // 自定义插槽内容占满整项
+    > * {
+      flex: 1;
+      min-width: 0;
+    }
   }
 
   &__separator {

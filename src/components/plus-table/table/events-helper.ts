@@ -81,6 +81,8 @@ export function useEvents<T extends RowData = RowData>(table: PlusTable<T>) {
         label: item.label,
         disabled,
         separator: item.separator,
+        closeOnSelect: item.closeOnSelect,
+        slotProps: ctx as unknown as Record<string, unknown>,
         handler: () => item.handler(ctx),
       });
     }

@@ -130,6 +130,35 @@ describe('PlusTable context menu events', () => {
     expect(open.mock.calls[0]![1].map((item) => item.key)).toEqual(['visible']);
   });
 
+  it('resolves closeOnSelect and slotProps for menu item slots', () => {
+    const { testTable, events, open } = setup({
+      contextMenu: [
+        {
+          key: 'insert-n',
+          label: '插入行',
+          closeOnSelect: false,
+          handler: () => undefined,
+        },
+      ],
+    });
+    const row = testTable.props.data[0]!;
+    const columnId = testTable.store.states.columns.value[0]!.id;
+    const cell = document.createElement('td');
+    const event = mouseEvent(cell);
+
+    events.handleCellContextmenu(row, { columnKey: columnId }, cell, event);
+
+    const item = open.mock.calls[0]![1][0]!;
+    expect(item.key).toBe('insert-n');
+    expect(item.closeOnSelect).toBe(false);
+    expect(item.slotProps).toEqual(
+      expect.objectContaining({
+        row,
+        rowIndex: 0,
+      }),
+    );
+  });
+
   it('does not open cell menu when right-clicking inside a control', () => {
     const { testTable, events, open } = setup({
       contextMenu: [{ key: 'copy', label: '复制', handler: () => undefined }],

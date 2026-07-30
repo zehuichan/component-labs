@@ -60,6 +60,7 @@ const statusOptions = [
 ];
 
 const baseColumns = defineColumns<Row>([
+  { type: 'selection', width: 48 },
   { type: 'index', label: '#', width: 60 },
   {
     prop: 'name',

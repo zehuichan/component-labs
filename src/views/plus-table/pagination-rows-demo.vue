@@ -25,6 +25,8 @@ const allRows = ref<Row[]>(
 
 const page = ref(1);
 const pageSize = ref(5);
+const selectedRows = ref<Row[]>([]);
+const insertCount = ref(1);
 
 const pageRows = computed(() => {
   const start = (page.value - 1) * pageSize.value;
@@ -32,6 +34,7 @@ const pageRows = computed(() => {
 });
 
 const columns = defineColumns<Row>([
+  { type: 'selection', width: 48 },
   { type: 'index', label: '#', width: 60 },
   {
     prop: 'name',
@@ -62,10 +65,26 @@ function addRow() {
   page.value = Math.ceil(allRows.value.length / pageSize.value) || 1;
 }
 
+function clampPage() {
+  const maxPage = Math.max(1, Math.ceil(allRows.value.length / pageSize.value) || 1);
+  if (page.value > maxPage) page.value = maxPage;
+}
+
 function removeRowById(id: number) {
   allRows.value = allRows.value.filter((row) => row.id !== id);
-  const maxPage = Math.max(1, Math.ceil(allRows.value.length / pageSize.value));
-  if (page.value > maxPage) page.value = maxPage;
+  clampPage();
+}
+
+function handleSelectionChange(rows: Row[]) {
+  selectedRows.value = rows;
+}
+
+function removeSelectedRows() {
+  if (!selectedRows.value.length) return;
+  const ids = new Set(selectedRows.value.map((row) => row.id));
+  allRows.value = allRows.value.filter((row) => !ids.has(row.id));
+  selectedRows.value = [];
+  clampPage();
 }
 
 function duplicateRowById(id: number) {
@@ -82,6 +101,36 @@ function duplicateRowById(id: number) {
   allRows.value = next;
 }
 
+/** 在指定行后插入 N 行（改全量源） */
+function insertRowsAfter(id: number, count: number) {
+  const n = Math.min(100, Math.max(1, Math.floor(Number(count)) || 1));
+  const index = allRows.value.findIndex((row) => row.id === id);
+  if (index < 0) return;
+  const inserts: Row[] = Array.from({ length: n }, () => {
+    const rowId = nextId++;
+    return { id: rowId, name: `新任务 ${rowId}`, owner: 'Alice' };
+  });
+  const next = [...allRows.value];
+  next.splice(index + 1, 0, ...inserts);
+  allRows.value = next;
+  insertCount.value = 1;
+}
+
+function confirmInsert(row: Row, close: () => void) {
+  insertRowsAfter(row.id, insertCount.value);
+  close();
+}
+
+function onInsertItemClick(event: MouseEvent, row: Row, close: () => void) {
+  const target = event.target as HTMLElement | null;
+  if (target?.closest('.el-input-number, input')) return;
+  confirmInsert(row, close);
+}
+
+function clampInsertCount(value: number | undefined) {
+  insertCount.value = Math.min(100, Math.max(1, Math.floor(Number(value)) || 1));
+}
+
 function removeFirstOnPage() {
   const first = pageRows.value[0];
   if (!first) return;
@@ -94,24 +143,41 @@ function duplicateFirstOnPage() {
   duplicateRowById(first.id);
 }
 
-const contextMenu: ContextMenuItem<Row>[] = [
-  {
-    key: 'add',
-    label: '新增一行',
-    handler: () => addRow(),
-  },
-  {
-    key: 'duplicate',
-    label: '复制此行',
-    separator: true,
-    handler: ({ row }) => duplicateRowById(row.id),
-  },
-  {
-    key: 'remove',
-    label: '删除此行',
-    handler: ({ row }) => removeRowById(row.id),
-  },
-];
+/** 菜单项含勾选数量，用函数形式让每次右键都重新解析 */
+function contextMenu(): ContextMenuItem<Row>[] {
+  const selectedCount = selectedRows.value.length;
+  return [
+    {
+      key: 'add',
+      label: '新增一行',
+      handler: () => addRow(),
+    },
+    {
+      key: 'duplicate',
+      label: '复制此行',
+      handler: ({ row }) => duplicateRowById(row.id),
+    },
+    {
+      key: 'insert-n',
+      label: '插入行',
+      // 内容由 #context-menu-item-insert-n 提供；壳不自动关，由插槽内 close
+      closeOnSelect: false,
+      separator: true,
+      handler: ({ row }) => insertRowsAfter(row.id, insertCount.value),
+    },
+    {
+      key: 'remove',
+      label: '删除此行',
+      handler: ({ row }) => removeRowById(row.id),
+    },
+    {
+      key: 'remove-selected',
+      label: `删除勾选行${selectedCount ? ` (${selectedCount})` : ''}`,
+      disabled: !selectedCount,
+      handler: () => removeSelectedRows(),
+    },
+  ];
+}
 </script>
 
 <template>
@@ -121,7 +187,9 @@ const contextMenu: ContextMenuItem<Row>[] = [
       <code>data</code>（服务端分页同理）。本页用内存全量 +
       <code>computed</code> 切片演示。行增删改请改全量源，不要对当前页数组调
       <code>insertRow</code>（否则只动这一页）。表体右键菜单通过
-      <code>context-menu</code> 配置，同样操作全量源。
+      <code>context-menu</code> 声明动作项，自定义内容用
+      <code>#context-menu-item-${'{key}'}</code> 插槽（对齐 <code>#cell-*</code> /
+      <code>#editor-*</code>）。
     </template>
 
     <template #api>
@@ -149,7 +217,11 @@ const contextMenu: ContextMenuItem<Row>[] = [
         <tr>
           <td><code>context-menu</code></td>
           <td><code>ContextMenuItem[] | (ctx) =&gt; ContextMenuItem[]</code></td>
-          <td>表体自定义右键菜单；空则保留浏览器原生菜单。</td>
+          <td>
+            表体右键动作列表；自定义项内容用
+            <code>#context-menu-item-${'{key}'}</code>，内嵌控件时设
+            <code>closeOnSelect: false</code>。
+          </td>
         </tr>
       </DemoApiTable>
 
@@ -197,13 +269,20 @@ const contextMenu: ContextMenuItem<Row>[] = [
             <code>total</code> 时仍可单独显示。
           </td>
         </tr>
+        <tr>
+          <td><code>#context-menu-item-${'{key}'}</code></td>
+          <td>
+            右键菜单项自定义内容；参数为
+            <code>ContextMenuItemSlotProps</code>（含 <code>close</code>）。
+          </td>
+        </tr>
       </DemoApiTable>
     </template>
 
     <DemoBlock>
       <template #hint>
-        翻页 / 改 pageSize；toolbar 与表体右键菜单均可增删复制，改的是
-        <code>allRows</code>。表头右键可隐藏列 / 打开列设置。
+        右键「插入 N 行」：改数字后点输入框以外区域或回车插入；勾选后可批量删除。翻页 / toolbar
+        与菜单均改 <code>allRows</code>。表头右键可隐藏列 / 打开列设置。
       </template>
       <PlusTable
         :data="pageRows"
@@ -216,6 +295,7 @@ const contextMenu: ContextMenuItem<Row>[] = [
         :page-size="pageSize"
         :page-sizes="[5, 10, 20]"
         :context-menu="contextMenu"
+        @selection-change="handleSelectionChange"
         @update:page="page = $event"
         @update:page-size="pageSize = $event"
         @page-change="handlePageChange"
@@ -223,6 +303,14 @@ const contextMenu: ContextMenuItem<Row>[] = [
         <template #title>任务列表</template>
         <template #toolbar>
           <el-button type="primary" @click="addRow">新增</el-button>
+          <el-button
+            type="danger"
+            plain
+            :disabled="!selectedRows.length"
+            @click="removeSelectedRows"
+          >
+            删除勾选行{{ selectedRows.length ? ` (${selectedRows.length})` : '' }}
+          </el-button>
           <el-button @click="removeFirstOnPage">删除当前页首行</el-button>
           <el-button @click="duplicateFirstOnPage">复制当前页首行</el-button>
         </template>
@@ -230,6 +318,22 @@ const contextMenu: ContextMenuItem<Row>[] = [
           <span class="demo__meta"
             >共 {{ allRows.length }} 行 · 当前页 {{ pageRows.length }} 条</span
           >
+        </template>
+        <template #context-menu-item-insert-n="{ row, close }">
+          <div @click="onInsertItemClick($event, row, close)">
+            插入
+            <el-input-number
+              :model-value="insertCount"
+              :min="1"
+              :max="100"
+              size="small"
+              :controls="false"
+              style="width: 5cqw"
+              @update:model-value="clampInsertCount"
+              @keydown.enter.stop="confirmInsert(row, close)"
+            />
+            行
+          </div>
         </template>
       </PlusTable>
     </DemoBlock>

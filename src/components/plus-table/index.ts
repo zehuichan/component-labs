@@ -32,6 +32,7 @@ export type {
   CellRule,
   ContextMenuContext,
   ContextMenuItem,
+  ContextMenuItemSlotProps,
   EditMode,
   HotkeyBinding,
   HotkeyContext,

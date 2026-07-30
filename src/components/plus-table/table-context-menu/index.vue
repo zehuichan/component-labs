@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, type VNodeChild } from 'vue';
 import {
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -42,9 +42,35 @@ function openMenu(event: MouseEvent, nextItems: ResolvedMenuItem[]) {
   open.value = true;
 }
 
-function handleSelect(item: ResolvedMenuItem) {
-  if (item.disabled) return;
+function closeMenu() {
+  open.value = false;
+}
+
+function handleSelect(item: ResolvedMenuItem, event: Event) {
+  if (item.disabled) {
+    event.preventDefault();
+    return;
+  }
+  // 对齐 editor 插槽：交互项由插槽自行 commit/close，壳不自动关
+  if (item.closeOnSelect === false) {
+    event.preventDefault();
+    return;
+  }
   item.handler();
+}
+
+/**
+ * 与 cell-${prop} / editor-${prop} 一致：有同名插槽则渲染插槽，否则回退 label。
+ * close 由壳注入，对应 EditorSlotProps.commit / cancel。
+ */
+function itemContent(item: ResolvedMenuItem): () => VNodeChild {
+  return () => {
+    const slot = table.slots[`context-menu-item-${item.key}`];
+    if (slot && item.slotProps) {
+      return slot({ ...item.slotProps, close: closeMenu });
+    }
+    return item.label;
+  };
 }
 
 watch(open, (value) => {
@@ -71,9 +97,9 @@ defineExpose({ open: openMenu });
             <DropdownMenuItem
               class="ptbl-context-menu__item"
               :disabled="item.disabled"
-              @select="handleSelect(item)"
+              @select="(event) => handleSelect(item, event)"
             >
-              {{ item.label }}
+              <component :is="itemContent(item)" />
             </DropdownMenuItem>
             <DropdownMenuSeparator v-if="item.separator" class="ptbl-context-menu__separator" />
           </template>

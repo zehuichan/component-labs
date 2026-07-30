@@ -81,15 +81,35 @@ export interface ContextMenuContext<T extends RowData = RowData> {
   data: T[];
 }
 
+/**
+ * `#context-menu-item-${key}` 插槽参数。
+ * 对齐 `#editor-${prop}`：作用域带壳能力（close ≈ editor 的 commit/cancel）。
+ */
+export interface ContextMenuItemSlotProps<
+  T extends RowData = RowData,
+> extends ContextMenuContext<T> {
+  /** 关闭右键菜单（内嵌控件确认后调用） */
+  close: () => void;
+}
+
 export interface ContextMenuItem<T extends RowData = RowData> {
-  /** 唯一标识；缺省时用 label + 下标兜底 */
+  /**
+   * 唯一标识；缺省时用 label + 下标兜底。
+   * 提供 `#context-menu-item-${key}` 插槽时必须显式设置，用于匹配插槽名。
+   */
   key?: string;
+  /** 无同名插槽时显示的纯文本标签 */
   label: string;
   /** 返回 false 则整项不渲染 */
   when?: (ctx: ContextMenuContext<T>) => boolean;
   disabled?: boolean | ((ctx: ContextMenuContext<T>) => boolean);
   /** 该项之后画分隔线 */
   separator?: boolean;
+  /**
+   * 选中时是否关闭并执行 handler；默认 true。
+   * 内嵌控件的插槽项设为 false，由插槽内主动调用 close / 业务逻辑。
+   */
+  closeOnSelect?: boolean;
   handler: (ctx: ContextMenuContext<T>) => void;
 }
 

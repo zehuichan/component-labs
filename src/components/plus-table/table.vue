@@ -16,7 +16,12 @@ import type { TableInstance } from 'element-plus';
 import type { PlusTable } from './tokens';
 import type { ColumnSettingsExpose, ContextMenuExpose, TableHost } from './store/context';
 import type { EditorSlotProps, HeaderSlotProps } from './table-cell/render-helper';
-import type { PlusTableEmits, PlusTableProps, RowData } from './table/defaults';
+import type {
+  PlusTableEmits,
+  PlusTableProps,
+  RowData,
+  ContextMenuItemSlotProps,
+} from './table/defaults';
 import type { CellContext } from './table-column/defaults';
 
 defineOptions({ name: 'PlusTable', inheritAttrs: false });
@@ -38,6 +43,8 @@ defineSlots<{
   [key: `cell-${string}`]: (props: CellContext<T>) => unknown;
   [key: `header-${string}`]: (props: HeaderSlotProps<T>) => unknown;
   [key: `editor-${string}`]: (props: EditorSlotProps<T>) => unknown;
+  /** 右键菜单项自定义内容；与 contextMenu 项的 key 对应 */
+  [key: `context-menu-item-${string}`]: (props: ContextMenuItemSlotProps<T>) => unknown;
 }>();
 
 /**
