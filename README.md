@@ -44,6 +44,7 @@ pnpm dev
 - `/plus-table/dependencies-validation`
 - `/plus-table/history-dirty`
 - `/plus-table/pagination-rows`
+- `/plus-table/adaptive-height`
 
 ERP 单据联动场景（引擎：`useEmitEffect`，`@/composables`；三页为独立完整 demo）：
 

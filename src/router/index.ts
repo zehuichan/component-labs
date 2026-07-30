@@ -17,6 +17,7 @@ import ApiOverview from '@/views/plus-table/api-overview.vue';
 import BasicEditingDemo from '@/views/plus-table/basic-editing-demo.vue';
 import DependenciesValidationDemo from '@/views/plus-table/dependencies-validation-demo.vue';
 import HistoryDirtyDemo from '@/views/plus-table/history-dirty-demo.vue';
+import AdaptiveHeightDemo from '@/views/plus-table/adaptive-height-demo.vue';
 import PaginationRowsDemo from '@/views/plus-table/pagination-rows-demo.vue';
 
 export const router = createRouter({
@@ -62,6 +63,12 @@ export const router = createRouter({
           name: 'plus-table-pagination-rows',
           component: PaginationRowsDemo,
           meta: { title: '分页与行操作', group: 'PlusTable', order: 4 },
+        },
+        {
+          path: 'plus-table/adaptive-height',
+          name: 'plus-table-adaptive-height',
+          component: AdaptiveHeightDemo,
+          meta: { title: '自适应高度', group: 'PlusTable', order: 5 },
         },
         {
           path: 'erp/api-overview',
