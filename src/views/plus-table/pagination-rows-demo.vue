@@ -328,7 +328,7 @@ function contextMenu(): ContextMenuItem<Row>[] {
               :max="100"
               size="small"
               :controls="false"
-              style="width: 5cqw"
+              style="width: 52px"
               @update:model-value="clampInsertCount"
               @keydown.enter.stop="confirmInsert(row, close)"
             />
