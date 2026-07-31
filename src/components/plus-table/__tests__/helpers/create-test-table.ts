@@ -1,11 +1,14 @@
 import { effectScope, reactive, shallowRef, type EffectScope, type Slots } from 'vue';
 import { vi } from 'vitest';
+import { initComponentAdapter } from '@/adapter';
 import { createStore } from '../../store/helper';
 import { DEFAULT_PROPS } from '../../table/defaults';
 import type { InternalStore } from '../../store';
 import type { TableHost } from '../../store/context';
 import type { PlusTable } from '../../tokens';
 import type { PlusTableEmits, PlusTableProps, RowData } from '../../table/defaults';
+
+initComponentAdapter();
 
 /**
  * 测试里的列配置刻意保持宽松：不少用例要构造只有运行期才会拒绝的非法配置

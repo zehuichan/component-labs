@@ -13,6 +13,9 @@ import ErpApiOverview from '@/views/erp/api-overview.vue';
 import ExpenseReportLinkageDemo from '@/views/erp/expense-report-linkage-demo.vue';
 import PurchaseOrderLinkageDemo from '@/views/erp/purchase-order-linkage-demo.vue';
 import SalesOrderLinkageDemo from '@/views/erp/sales-order-linkage-demo.vue';
+import FiltersApiOverview from '@/views/filters/api-overview.vue';
+import FiltersBasicDemo from '@/views/filters/basic-demo.vue';
+import FiltersPresetDemo from '@/views/filters/preset-demo.vue';
 import ApiOverview from '@/views/plus-table/api-overview.vue';
 import BasicEditingDemo from '@/views/plus-table/basic-editing-demo.vue';
 import DependenciesValidationDemo from '@/views/plus-table/dependencies-validation-demo.vue';
@@ -69,6 +72,24 @@ export const router = createRouter({
           name: 'plus-table-adaptive-height',
           component: AdaptiveHeightDemo,
           meta: { title: '自适应高度', group: 'PlusTable', order: 5 },
+        },
+        {
+          path: 'filters/api-overview',
+          name: 'filters-api-overview',
+          component: FiltersApiOverview,
+          meta: { title: 'API Overview', group: 'Filters', order: 0 },
+        },
+        {
+          path: 'filters/basic',
+          name: 'filters-basic',
+          component: FiltersBasicDemo,
+          meta: { title: '基础筛选', group: 'Filters', order: 1 },
+        },
+        {
+          path: 'filters/preset',
+          name: 'filters-preset',
+          component: FiltersPresetDemo,
+          meta: { title: '预设值', group: 'Filters', order: 2 },
         },
         {
           path: 'erp/api-overview',

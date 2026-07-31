@@ -19,6 +19,7 @@ export type {
   EditorColumnFields,
   ResolvedEditor,
 } from './adapter';
+export type { ComponentType } from '@/adapter';
 export type { Store } from './store';
 export type { SettingItem } from './store/columns';
 export type { CellPosition } from './store/current';

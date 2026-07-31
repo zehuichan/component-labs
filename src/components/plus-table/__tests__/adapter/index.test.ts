@@ -1,19 +1,25 @@
-import { describe, expect, it } from 'vitest';
-import { ElInput, ElSelectV2 } from 'element-plus';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
+
+import { initComponentAdapter, useGlobalShareState } from '@/adapter';
+
 import { resolveEditor, typedCharToDraft } from '../../adapter';
 
 const ctx = { row: { id: 1 }, rowIndex: 0 };
 
+beforeAll(() => {
+  initComponentAdapter();
+});
+
 describe('resolveEditor', () => {
   it('defaults to input when component is omitted', () => {
     const resolved = resolveEditor({}, ctx);
-    expect(resolved.component).toBe(ElInput);
+    expect(resolved.component).toBe(useGlobalShareState().getComponents().input);
     expect(resolved.trigger).toBe('blur');
     expect(resolved.modelProp).toBe('modelValue');
   });
 
-  it('resolves builtin string component and merges componentProps over registry defaults', () => {
+  it('resolves builtin string component and merges column componentProps', () => {
     const resolved = resolveEditor(
       {
         component: 'textarea',
@@ -21,18 +27,15 @@ describe('resolveEditor', () => {
       },
       ctx,
     );
-    expect(resolved.component).toBe(ElInput);
-    expect(resolved.componentProps).toEqual({
-      type: 'textarea',
-      autosize: true,
-      placeholder: '备注',
-    });
+    expect(resolved.component).toBe(useGlobalShareState().getComponents().textarea);
+    expect(resolved.componentProps).toEqual({ placeholder: '备注' });
     expect(resolved.trigger).toBe('blur');
   });
 
-  it('resolves input-number with controls disabled by default', () => {
+  it('resolves input-number with blur trigger (defaults live in wrapper)', () => {
     const resolved = resolveEditor({ component: 'input-number' }, ctx);
-    expect(resolved.componentProps).toEqual({ controls: false });
+    expect(resolved.component).toBe(useGlobalShareState().getComponents()['input-number']);
+    expect(resolved.componentProps).toEqual({});
     expect(resolved.trigger).toBe('blur');
   });
 
@@ -44,7 +47,7 @@ describe('resolveEditor', () => {
       },
       ctx,
     );
-    expect(resolved.component).toBe(ElSelectV2);
+    expect(resolved.component).toBe(useGlobalShareState().getComponents().select);
     expect(resolved.trigger).toBe('change');
     expect(resolved.componentProps.options).toEqual([{ label: 'A', value: 'a' }]);
   });
@@ -80,7 +83,7 @@ describe('resolveEditor', () => {
 });
 
 describe('typedCharToDraft', () => {
-  it('seeds ElInput with the typed char', () => {
+  it('seeds input with the typed char', () => {
     expect(typedCharToDraft({ component: 'input' }, 'a')).toBe('a');
   });
 
