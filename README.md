@@ -13,8 +13,6 @@
 ```
 workbench/
 ├── brand/                    # Logo、预览页
-├── docs/superpowers/         # 设计规格与实现计划
-├── scripts/
 ├── src/
 │   ├── api/
 │   ├── components/
