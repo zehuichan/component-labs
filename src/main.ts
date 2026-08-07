@@ -9,6 +9,7 @@ import './styles/tailwind.css';
 import { initComponentAdapter } from '@/adapter';
 import App from './App.vue';
 import { router } from './router';
+import '@/utils/sso';
 
 initComponentAdapter();
 

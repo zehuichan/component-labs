@@ -7,6 +7,7 @@ import QrconnectCallback from '@/views/composables/qrconnect-callback.vue';
 import UseAutoSaveDemo from '@/views/composables/use-auto-save-demo.vue';
 import UseFormDraftDemo from '@/views/composables/use-form-draft-demo.vue';
 import UseSaveHotkeyDemo from '@/views/composables/use-save-hotkey-demo.vue';
+import UseSsoDemo from '@/views/composables/use-sso-demo.vue';
 import UseWechatDemo from '@/views/composables/use-wechat-demo.vue';
 import UseWecomDemo from '@/views/composables/use-wecom-demo.vue';
 import ErpApiOverview from '@/views/erp/api-overview.vue';
@@ -132,6 +133,12 @@ export const router = createRouter({
           name: 'composables-use-save-hotkey',
           component: UseSaveHotkeyDemo,
           meta: { title: 'use-save-hotkey', group: 'Form', order: 3 },
+        },
+        {
+          path: 'composables/use-sso',
+          name: 'composables-use-sso',
+          component: UseSsoDemo,
+          meta: { title: 'sso', group: 'Auth', order: 1 },
         },
         {
           path: 'composables/use-oauth2',
