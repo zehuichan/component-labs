@@ -1,0 +1,24 @@
+<script setup lang="ts">
+defineOptions({ name: 'WorkbenchMark' });
+
+withDefaults(defineProps<{ size?: number }>(), { size: 22 });
+</script>
+
+<template>
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 64 64"
+    fill="none"
+    :width="size"
+    :height="size"
+    class="shrink-0"
+    aria-hidden="true"
+  >
+    <rect x="4" y="4" width="56" height="56" rx="14" fill="#0B6E6E" />
+    <rect x="14" y="14" width="16" height="16" rx="3.5" fill="#F2EFE6" opacity="0.95" />
+    <rect x="34" y="14" width="16" height="16" rx="3.5" fill="#F2EFE6" opacity="0.55" />
+    <rect x="14" y="34" width="16" height="16" rx="3.5" fill="#F2EFE6" opacity="0.55" />
+    <rect x="34" y="34" width="16" height="16" rx="3.5" fill="#F2EFE6" opacity="0.28" />
+    <rect x="18" y="18" width="8" height="2.5" rx="1.25" fill="#0B6E6E" />
+  </svg>
+</template>

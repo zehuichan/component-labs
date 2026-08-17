@@ -1,4 +1,5 @@
 import { createApp, h, nextTick } from 'vue';
+import { createMemoryHistory, createRouter, RouterLink } from 'vue-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import PlaygroundHeader from '../playground-header.vue';
 
@@ -12,6 +13,13 @@ describe('playground-header', () => {
     },
     onSelect = vi.fn(),
   ) {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div />' } }],
+    });
+    await router.push('/');
+    await router.isReady();
+
     const host = document.createElement('div');
     document.body.append(host);
     const app = createApp({
@@ -21,6 +29,8 @@ describe('playground-header', () => {
           onSelect: (key: string) => onSelect(key),
         }),
     });
+    app.use(router);
+    app.component('RouterLink', RouterLink);
     app.mount(host);
     await nextTick();
     mounted.push({ app, host });
@@ -76,5 +86,29 @@ describe('playground-header', () => {
     packagesEl!.click();
     await nextTick();
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('links the brand lockup back to the site home', async () => {
+    const { host } = await mountHeader({
+      categories: [...categories],
+      activeCategory: 'components',
+    });
+    const brand = host.querySelector('a[href="/"]') as HTMLAnchorElement | null;
+    expect(brand).toBeTruthy();
+    expect(brand!.textContent).toContain('Workbench');
+  });
+
+  it('renders a GitHub repository link', async () => {
+    const { host } = await mountHeader({
+      categories: [...categories],
+      activeCategory: 'composables',
+    });
+    const githubLink = host.querySelector(
+      'a[href="https://github.com/zehuichan/workbench"]',
+    ) as HTMLAnchorElement | null;
+    expect(githubLink).toBeTruthy();
+    expect(githubLink!.target).toBe('_blank');
+    expect(githubLink!.rel).toContain('noopener');
+    expect(githubLink!.getAttribute('aria-label')).toBe('GitHub repository');
   });
 });

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap');
 
 @import 'tailwindcss';
 @import 'tw-animate-css';
@@ -11,7 +11,8 @@
     'Geist Variable', 'Geist', 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB',
     'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
   --font-heading: var(--font-sans);
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-mono:
+    'Geist Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --radius-xs: 4px;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -95,6 +96,12 @@
   --paper: #f2efe6;
   --inverse-canvas: #1a1f28;
   --code-canvas: #1a1f28;
+
+  /* Site shell (marketing pages) — DESIGN.md surface-1 floor, canvas cards */
+  --site-canvas: #fafafa;
+  --site-nav: #ffffffd9;
+  --site-dot: #14181f1f;
+  --site-edge: #a3a3a3;
 }
 
 /* DESIGN.md — dark */
@@ -141,6 +148,11 @@
   --inverse-canvas: #0f1218;
   --code-canvas: #0f1218;
 
+  --site-canvas: #14181f;
+  --site-nav: #14181fd9;
+  --site-dot: #f2efe61f;
+  --site-edge: #6b6570;
+
   color-scheme: dark;
 }
 
@@ -171,6 +183,58 @@
 
   body {
     @apply bg-background text-foreground font-sans;
+  }
+}
+
+@utility site-dot-grid {
+  background-image: radial-gradient(var(--site-dot) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: -1px -1px;
+}
+
+/* Ink band backdrop: two teal washes over the dark canvas, kept well below neon. */
+@utility site-ink-aura {
+  background-image:
+    radial-gradient(
+      56% 46% at 2% -16%,
+      color-mix(in oklab, var(--brand) 38%, transparent) 0%,
+      transparent 64%
+    ),
+    radial-gradient(
+      42% 38% at 96% -6%,
+      color-mix(in oklab, var(--brand) 14%, transparent) 0%,
+      transparent 62%
+    ),
+    linear-gradient(to bottom, transparent 30%, #0f1218 100%);
+}
+
+@utility site-mask-fade-b {
+  mask-image: linear-gradient(to bottom, #000 0%, #000 48%, transparent 100%);
+}
+
+@utility site-mask-fade-y {
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 22%, #000 74%, transparent 100%);
+}
+
+@utility site-reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 620ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 620ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+
+  &[data-reveal='in'] {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
 }
 

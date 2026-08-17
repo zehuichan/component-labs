@@ -490,7 +490,8 @@ Dark mode is a **paired inversion of surfaces**, not a second brand. Keep the sa
 ### Activation
 
 - Class strategy: `document.documentElement.classList.toggle('dark')` (Tailwind v4 `@custom-variant dark (&:is(.dark *))`).
-- App ships **light-only** for now (dark CSS tokens may remain unused). Re-enable later with `html.dark` + header toggle if adaptation is ready.
+- Product / playground chrome ships **light-only** for now. Re-enable later with `html.dark` + header toggle if adaptation is ready.
+- Marketing pages may scope `.dark` to a **section** to build an ink band (home hero, closing CTA). The band inherits the paired dark tokens, so teal stays a rim light — never a full-page wash. The site header adds `.dark` while it rides on such a band.
 - Brand preview (`docs/brand/preview.html`) may still demo dark for design review.
 
 ### Contrast checks

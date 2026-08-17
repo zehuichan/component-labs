@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router';
 
 import PlaygroundLayout from '@/layouts/playground-layout.vue';
+import SiteLayout from '@/layouts/site-layout.vue';
+import SiteHome from '@/views/home/site-home.vue';
 import UseOauth2Demo from '@/views/composables/use-oauth2-demo.vue';
 import UseQrconnectDemo from '@/views/composables/use-qrconnect-demo.vue';
 import QrconnectCallback from '@/views/composables/qrconnect-callback.vue';
@@ -35,9 +37,13 @@ export const router = createRouter({
     },
     {
       path: '/',
+      component: SiteLayout,
+      children: [{ path: '', name: 'home', component: SiteHome, meta: { title: 'Workbench' } }],
+    },
+    {
+      path: '/',
       component: PlaygroundLayout,
       children: [
-        { path: '', redirect: '/plus-table/basic-editing' },
         {
           path: 'plus-table/api-overview',
           name: 'plus-table-api-overview',
