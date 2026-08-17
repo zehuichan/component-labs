@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { SidebarInset, SidebarProvider } from '@/ui/sidebar';
+import PlaygroundAside from './playground-aside.vue';
 import PlaygroundHeader from './playground-header.vue';
 import PlaygroundSidebar from './playground-sidebar.vue';
 import '@/styles/index.scss';
@@ -81,8 +82,11 @@ function selectCategory(key: string): void {
     <SidebarProvider class="flex-1 overflow-hidden !min-h-0">
       <PlaygroundSidebar :groups="navGroups" />
       <SidebarInset class="min-h-0 min-w-0 overflow-hidden bg-background">
-        <div class="scrollbar-thin h-full overflow-y-auto px-10 pt-8 pb-16">
-          <router-view />
+        <div class="flex h-full min-h-0">
+          <div class="scrollbar-thin min-w-0 flex-1 overflow-y-auto px-10 pt-8 pb-16">
+            <router-view />
+          </div>
+          <PlaygroundAside />
         </div>
       </SidebarInset>
     </SidebarProvider>
