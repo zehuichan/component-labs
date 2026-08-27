@@ -1,25 +1,16 @@
-import {
-  onScopeDispose,
-  readonly,
-  ref,
-  shallowRef,
-  toValue,
-  type MaybeRefOrGetter,
-  type Ref,
-} from 'vue';
-import { useTimeoutFn } from '@vueuse/core';
+import { readonly, shallowRef, toValue, type MaybeRefOrGetter, type Ref } from 'vue';
+import { tryOnScopeDispose, useTimeoutFn } from '@vueuse/core';
 import { watchReadable } from '../shared/watch-readable';
 
 export type AutoSaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
 
+/**
+ * Persists the latest value evaluated when a save starts.
+ * Must not call this instance's flush or withPaused controls.
+ */
+export type AutoSaveHandler<T> = (value: T, signal: AbortSignal) => void | Promise<void>;
+
 export interface UseAutoSaveOptions<T> {
-  /** Reactive value observed with deep semantics. */
-  source: MaybeRefOrGetter<T>;
-  /**
-   * Persists the latest value evaluated when a save starts.
-   * Must not call this instance's flush or withPaused controls.
-   */
-  save: (value: T, signal: AbortSignal) => void | Promise<void>;
   /** Whether source changes may schedule automatic saves. */
   enabled?: MaybeRefOrGetter<boolean>;
   /** Delay before an automatic save starts. */
@@ -58,12 +49,24 @@ const onSettled = (task: Promise<unknown>, cleanup: () => void): void => {
  *
  * Local drafts and save hotkeys remain separate concerns. A save callback that
  * requires an immutable payload should provide a getter that creates one.
+ *
+ * @param source Reactive value observed with deep semantics.
+ * @param save Persists the value captured when a save starts.
+ *
+ * @example
+ * const { status, flush } = useAutoSave(form, (value) => api.save(value), {
+ *   debounceMs: 1000,
+ * })
  */
-export function useAutoSave<T>(options: UseAutoSaveOptions<T>): UseAutoSaveReturn {
-  const { source, save, enabled = true, debounceMs = 2000, onSuccess, onError } = options;
+export function useAutoSave<T>(
+  source: MaybeRefOrGetter<T>,
+  save: AutoSaveHandler<T>,
+  options: UseAutoSaveOptions<T> = {},
+): UseAutoSaveReturn {
+  const { enabled = true, debounceMs = 2000, onSuccess, onError } = options;
 
-  const status = ref<AutoSaveStatus>('idle');
-  const lastSavedAt = ref<number | null>(null);
+  const status = shallowRef<AutoSaveStatus>('idle');
+  const lastSavedAt = shallowRef<number | null>(null);
   const error = shallowRef<unknown | null>(null);
 
   let revision = 0;
@@ -363,12 +366,12 @@ export function useAutoSave<T>(options: UseAutoSaveOptions<T>): UseAutoSaveRetur
     }
   };
 
-  onScopeDispose(() => {
+  tryOnScopeDispose(() => {
     disposed = true;
     activeController?.abort();
     activeController = null;
     cancelScheduledSave();
-  }, true);
+  });
 
   return {
     status: readonly(status),

@@ -20,9 +20,7 @@ const defaults: FormState = { name: '', email: '', remark: '' };
 const form = ref<FormState>({ ...defaults });
 const enabled = ref(true);
 
-const { error, isPending, restore, clear, flush } = useFormDraft({
-  form,
-  key: DRAFT_KEY,
+const { error, isPending, restore, clear, flush } = useFormDraft(form, DRAFT_KEY, {
   enabled,
   defaults,
   debounceMs: 500,

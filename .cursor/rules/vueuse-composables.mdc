@@ -1,0 +1,80 @@
+---
+description: Composable authoring conventions, mirroring vueuse/vueuse
+globs: src/composables/**/*.ts,src/utils/**/*.ts
+alwaysApply: false
+---
+
+# Composable Conventions (reference: https://github.com/vueuse/vueuse)
+
+Treat VueUse as the style authority. When unsure, find the closest `@vueuse/core`
+function and copy its shape.
+
+## Signature
+
+Primary inputs are positional; everything optional goes in a trailing options object.
+Never bundle required inputs into the options bag.
+
+```ts
+// ❌ BAD — required data hidden in an options bag
+export function useAutoSave<T>(options: { source: MaybeRefOrGetter<T>; save: SaveFn; debounceMs?: number })
+
+// ✅ GOOD
+export function useAutoSave<T>(
+  source: MaybeRefOrGetter<T>,
+  save: SaveFn<T>,
+  options: UseAutoSaveOptions = {},
+): UseAutoSaveReturn
+```
+
+## Types
+
+Export `UseXxxOptions` / `UseXxxReturn` interfaces and annotate the return type
+explicitly. Options extend `ConfigurableWindow` when the composable touches
+browser globals.
+
+## Return shape
+
+Single value → return the ref itself. Multiple values → return an object.
+Tuples are reserved for the `useToggle` pattern (value + setter).
+
+```ts
+// ❌ BAD
+return [code, authorize];
+// ✅ GOOD
+return { code, authorize };
+```
+
+## Reactivity
+
+- Accept `MaybeRefOrGetter<T>`, unwrap with `toValue()`. Never `unref()`.
+- `shallowRef` by default; `ref`/`deep` only when nested tracking is required.
+
+## Lifecycle & side effects
+
+- Use `tryOnScopeDispose` / `tryOnMounted`, not bare `onScopeDispose` / `onMounted`,
+  so the composable stays callable outside a component scope.
+- Every listener/timer registered must be cleaned up. Prefer `useEventListener`,
+  `useTimeoutFn`, `useIntervalFn` over hand-rolled equivalents.
+- Modules must have **no import-time side effects**. Export a function; let callers invoke it.
+
+## Browser globals & config
+
+Read nothing from `window`, `document`, `location`, `navigator`, or
+`import.meta.env` directly. Take `{ window = defaultWindow }` from options, guard
+with `isClient`, and surface app config (AppId, feature flags, paths) as options
+with env-backed defaults.
+
+```ts
+// ❌ BAD
+const appId = import.meta.env.VITE_WECHAT_APPID ?? '';
+// ✅ GOOD
+const { appId = import.meta.env.VITE_WECHAT_APPID ?? '' } = options;
+```
+
+## Naming
+
+`useXxx` camelCase functions. File names stay **kebab-case** per `AGENTS.md`
+(`use-auto-save/use-auto-save.ts`) — this is the one place we intentionally
+diverge from VueUse's `useAutoSave/index.ts` layout.
+
+JSDoc in English, with an `@example` block showing the call site.

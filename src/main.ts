@@ -7,10 +7,11 @@ import 'element-plus/dist/index.css';
 import './styles/tailwind.css';
 
 import { initComponentAdapter } from '@/adapter';
+import { sso } from '@/utils/sso';
 import App from './App.vue';
 import { router } from './router';
-import '@/utils/sso';
 
+sso();
 initComponentAdapter();
 
 createApp(App).use(router).use(ElementPlus, { locale: zhCn }).mount('#app');

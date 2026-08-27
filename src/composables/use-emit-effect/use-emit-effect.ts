@@ -13,12 +13,8 @@ import {
   type EmitEffectRules,
 } from './emit-effect';
 
-export interface UseEmitEffectOptions<
-  H extends Record<string, unknown> = Record<string, unknown>,
-  L extends DocumentLine = DocumentLine,
-> {
-  rules: EmitEffectRules<H, L>;
-  initialDraft: DocumentDraft<H, L>;
+export interface UseEmitEffectOptions {
+  /** Asked before a mutation that would discard or overwrite line data. */
   confirm?: (confirmation: EmitEffectConfirmation) => boolean | Promise<boolean>;
 }
 
@@ -34,16 +30,32 @@ export interface UseEmitEffectReturn<
   reset: (next?: DocumentDraft<H, L>) => void;
 }
 
+/**
+ * Runs header/line emit rules over a document draft.
+ *
+ * @param rules Field linkage rules applied to every mutation.
+ * @param initialDraft Starting draft; cloned, and reused by `reset()`.
+ *
+ * @example
+ * const { draft, changeHeader } = useEmitEffect(salesOrderRules, initialDraft, {
+ *   confirm: (confirmation) => confirmDialog(confirmation.message),
+ * })
+ */
 export function useEmitEffect<
   H extends Record<string, unknown> = Record<string, unknown>,
   L extends DocumentLine = DocumentLine,
->(options: UseEmitEffectOptions<H, L>): UseEmitEffectReturn<H, L> {
-  const initial = cloneDeep(options.initialDraft);
+>(
+  rules: EmitEffectRules<H, L>,
+  initialDraft: DocumentDraft<H, L>,
+  options: UseEmitEffectOptions = {},
+): UseEmitEffectReturn<H, L> {
+  const { confirm } = options;
+  const initial = cloneDeep(initialDraft);
   const draft = ref(cloneDeep(initial)) as Ref<DocumentDraft<H, L>>;
 
   async function commit(mutation: EmitEffectMutation): Promise<boolean> {
     if (mutation.confirmation) {
-      const accepted = await (options.confirm?.(mutation.confirmation) ?? true);
+      const accepted = await (confirm?.(mutation.confirmation) ?? true);
       if (!accepted) return false;
     }
     draft.value = mutation.nextDraft as DocumentDraft<H, L>;
@@ -52,20 +64,13 @@ export function useEmitEffect<
 
   return {
     draft,
-    changeHeader: (field, value) =>
-      commit(buildHeaderMutation(options.rules, draft.value, field, value)),
-    changeCell: (command) => commit(applyDetailMutation(options.rules, draft.value, command)),
+    changeHeader: (field, value) => commit(buildHeaderMutation(rules, draft.value, field, value)),
+    changeCell: (command) => commit(applyDetailMutation(rules, draft.value, command)),
     addLine: (id) => {
-      draft.value = addLineMutation(options.rules, draft.value, id).nextDraft as DocumentDraft<
-        H,
-        L
-      >;
+      draft.value = addLineMutation(rules, draft.value, id).nextDraft as DocumentDraft<H, L>;
     },
     removeLine: (id) => {
-      draft.value = removeLineMutation(options.rules, draft.value, id).nextDraft as DocumentDraft<
-        H,
-        L
-      >;
+      draft.value = removeLineMutation(rules, draft.value, id).nextDraft as DocumentDraft<H, L>;
     },
     reset: (next) => {
       draft.value = cloneDeep(next ?? initial);

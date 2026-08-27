@@ -52,11 +52,9 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-const { status, lastSavedAt, error, flush, withPaused } = useAutoSave({
-  source: form,
-  enabled,
-  debounceMs,
-  save: async (value, signal) => {
+const { status, lastSavedAt, error, flush, withPaused } = useAutoSave(
+  form,
+  async (value, signal) => {
     await delay(400, signal);
     const next: FormState = {
       title: value.title,
@@ -65,7 +63,8 @@ const { status, lastSavedAt, error, flush, withPaused } = useAutoSave({
     localStorage.setItem(SERVER_KEY, JSON.stringify(next));
     serverSnapshot.value = next;
   },
-});
+  { enabled, debounceMs },
+);
 
 const lastSavedLabel = computed(() => {
   if (lastSavedAt.value === null) return '—';

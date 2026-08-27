@@ -9,11 +9,11 @@ defineOptions({ name: 'UseWecomDemo' });
 const codeDemo = `import { watch } from 'vue'
 import { useWecom } from '@/composables'
 
-const [ready, $ww] = useWecom()
+const { ready, ww } = useWecom()
 
 watch(ready, (ok) => {
   if (!ok) return
-  void $ww.getLocation({ type: 'gcj02' })
+  void ww.getLocation({ type: 'gcj02' })
 })`;
 </script>
 
@@ -29,34 +29,44 @@ watch(ready, (ok) => {
     </template>
 
     <template #api>
-      <DemoApiTable title="Returns (tuple)">
+      <DemoApiTable title="UseWecomOptions（仅首次调用生效）">
         <tr>
-          <td><code>[0] ready</code></td>
-          <td><code>Ref&lt;boolean&gt;</code></td>
-          <td><code>onAgentConfigSuccess</code> 之后为 <code>true</code>。</td>
+          <td><code>enabled</code></td>
+          <td><code>boolean</code></td>
+          <td>默认 <code>VITE_WW_JSSDK_ENABLED === 'true'</code>。</td>
         </tr>
         <tr>
-          <td><code>[1] ww</code></td>
-          <td><code>typeof import('@wecom/jssdk')</code></td>
-          <td><code>@wecom/jssdk</code> 命名空间；可直接调其 JSAPI。</td>
+          <td><code>corpId</code></td>
+          <td><code>string</code></td>
+          <td>默认取 <code>VITE_WORK_WECHAT_CORP_ID</code>。</td>
+        </tr>
+        <tr>
+          <td><code>agentId</code></td>
+          <td><code>string</code></td>
+          <td>默认取 <code>VITE_WORK_WECHAT_AGENT_ID</code>。</td>
+        </tr>
+        <tr>
+          <td><code>jsApiList</code></td>
+          <td><code>string[]</code></td>
+          <td>默认空数组；传入需要的 JSAPI。</td>
+        </tr>
+        <tr>
+          <td><code>window</code></td>
+          <td><code>Window</code></td>
+          <td>默认 <code>defaultWindow</code>；UA 判定从这里读。</td>
         </tr>
       </DemoApiTable>
 
-      <DemoApiTable title="Env">
+      <DemoApiTable title="UseWecomReturn">
         <tr>
-          <td><code>VITE_WW_JSSDK_ENABLED</code></td>
-          <td><code>string</code></td>
-          <td>仅当值为 <code>'true'</code> 时初始化。</td>
+          <td><code>ready</code></td>
+          <td><code>ShallowRef&lt;boolean&gt;</code></td>
+          <td><code>onAgentConfigSuccess</code> 之后为 <code>true</code>。</td>
         </tr>
         <tr>
-          <td><code>VITE_WORK_WECHAT_CORP_ID</code></td>
-          <td><code>string</code></td>
-          <td>传入 <code>ww.register</code> 的 <code>corpId</code>。</td>
-        </tr>
-        <tr>
-          <td><code>VITE_WORK_WECHAT_AGENT_ID</code></td>
-          <td><code>string</code></td>
-          <td>传入 <code>ww.register</code> 的 <code>agentId</code>。</td>
+          <td><code>ww</code></td>
+          <td><code>typeof import('@wecom/jssdk')</code></td>
+          <td><code>@wecom/jssdk</code> 命名空间；可直接调其 JSAPI。</td>
         </tr>
       </DemoApiTable>
     </template>

@@ -2,13 +2,21 @@ import { createApp, effectScope, ref, watch, type EffectScope, type Ref } from '
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   useAutoSave,
+  type AutoSaveHandler,
   type UseAutoSaveOptions,
   type UseAutoSaveReturn,
 } from '../../use-auto-save/use-auto-save';
+import type { MaybeRefOrGetter } from 'vue';
 
 interface FormState {
   name: string;
 }
+
+/** Mirrors the positional signature while keeping the tests declarative. */
+type AutoSaveSetup = UseAutoSaveOptions<FormState> & {
+  source: MaybeRefOrGetter<FormState>;
+  save: AutoSaveHandler<FormState>;
+};
 
 function deferred() {
   let resolve!: () => void;
@@ -23,8 +31,8 @@ function deferred() {
 describe('useAutoSave', () => {
   let scope: EffectScope;
 
-  const createAutoSave = (options: UseAutoSaveOptions<FormState>) => {
-    const autoSave = scope.run(() => useAutoSave(options));
+  const createAutoSave = ({ source, save, ...options }: AutoSaveSetup) => {
+    const autoSave = scope.run(() => useAutoSave(source, save, options));
     if (!autoSave) throw new Error('effect scope did not return auto-save');
     return autoSave;
   };
@@ -287,7 +295,7 @@ describe('useAutoSave', () => {
     const save = vi.fn();
     let autoSave!: UseAutoSaveReturn;
     scope.run(() => {
-      autoSave = useAutoSave({ source, save, debounceMs: 100 });
+      autoSave = useAutoSave(source, save, { debounceMs: 100 });
       watch(
         autoSave.status,
         (status) => {
@@ -309,14 +317,13 @@ describe('useAutoSave', () => {
     const onError = vi.fn();
     let autoSave!: UseAutoSaveReturn;
     scope.run(() => {
-      autoSave = useAutoSave({
+      autoSave = useAutoSave(
         source,
-        save: () => {
+        () => {
           throw failure;
         },
-        onError,
-        debounceMs: 100,
-      });
+        { onError, debounceMs: 100 },
+      );
       watch(
         autoSave.error,
         (error) => {
@@ -373,14 +380,14 @@ describe('useAutoSave', () => {
       setup() {
         source = ref<FormState>({ name: '' });
         shouldFail = ref(false);
-        autoSave = useAutoSave({
-          source: () => {
+        autoSave = useAutoSave(
+          () => {
             if (shouldFail.value) throw failure;
             return source.value;
           },
-          save: vi.fn(),
-          debounceMs: 100,
-        });
+          vi.fn(),
+          { debounceMs: 100 },
+        );
         return () => null;
       },
     });

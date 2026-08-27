@@ -13,7 +13,11 @@ import {
   type Component,
 } from 'vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useSaveHotkey, type UseSaveHotkeyOptions } from '../../use-save-hotkey/use-save-hotkey';
+import {
+  useSaveHotkey,
+  type SaveHotkeyHandler,
+  type UseSaveHotkeyOptions,
+} from '../../use-save-hotkey/use-save-hotkey';
 
 interface MountedHotkey {
   app: App;
@@ -47,14 +51,17 @@ function mountRoot(
   };
 }
 
+/** Mirrors the positional signature while keeping the tests declarative. */
+type HotkeySetup = UseSaveHotkeyOptions & { handler: SaveHotkeyHandler };
+
 function mountHotkey(
-  options: UseSaveHotkeyOptions,
+  { handler, ...options }: HotkeySetup,
   handleError?: (failure: unknown) => void,
 ): MountedHotkey {
   return mountRoot(
     {
       setup() {
-        useSaveHotkey(options);
+        useSaveHotkey(handler, options);
         return () => h('button', 'Save');
       },
     },
@@ -64,18 +71,18 @@ function mountHotkey(
 }
 
 function createNestedRoot(
-  parentOptions: UseSaveHotkeyOptions,
-  childOptions: UseSaveHotkeyOptions,
+  { handler: parentHandler, ...parentOptions }: HotkeySetup,
+  { handler: childHandler, ...childOptions }: HotkeySetup,
 ): Component {
   const Child = {
     setup() {
-      useSaveHotkey(childOptions);
+      useSaveHotkey(childHandler, childOptions);
       return () => h('button', 'Child');
     },
   };
   return {
     setup() {
-      useSaveHotkey(parentOptions);
+      useSaveHotkey(parentHandler, parentOptions);
       return () => h('div', [h(Child)]);
     },
   };
@@ -107,7 +114,7 @@ describe('useSaveHotkey', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     expect(() => {
-      scope.run(() => useSaveHotkey({ handler: vi.fn() }));
+      scope.run(() => useSaveHotkey(vi.fn()));
     }).toThrow('[useSaveHotkey]');
 
     scope.stop();
@@ -239,8 +246,7 @@ describe('useSaveHotkey', () => {
     const item = mountRoot(
       {
         setup() {
-          useSaveHotkey({
-            handler,
+          useSaveHotkey(handler, {
             active: () => {
               if (shouldFail.value) throw failure;
               return true;
@@ -296,7 +302,7 @@ describe('useSaveHotkey', () => {
     const item = mountRoot(
       {
         setup() {
-          useSaveHotkey({ handler });
+          useSaveHotkey(handler);
           return () => h(Fragment, [h('button', { id: 'first' }, 'First'), h('button', 'Second')]);
         },
       },
@@ -316,7 +322,7 @@ describe('useSaveHotkey', () => {
     const item = mountRoot(
       {
         setup() {
-          useSaveHotkey({ handler });
+          useSaveHotkey(handler);
           return () => h(Teleport, { to: teleportHost }, [h('button', 'Teleported')]);
         },
       },
@@ -341,7 +347,7 @@ describe('useSaveHotkey', () => {
     const sourceApp = mountRoot(
       {
         setup() {
-          useSaveHotkey({ handler: sourceHandler });
+          useSaveHotkey(sourceHandler);
           return () =>
             h(Teleport, { to: targetApp.host }, [
               h('button', { class: 'cross-app-teleport' }, 'Teleported'),
@@ -366,7 +372,7 @@ describe('useSaveHotkey', () => {
     const item = mountRoot(
       {
         setup() {
-          useSaveHotkey({ handler });
+          useSaveHotkey(handler);
           return () =>
             h('div', [
               h('span', 'Local'),
@@ -404,7 +410,7 @@ describe('useSaveHotkey', () => {
     const item = mountRoot(
       {
         setup() {
-          useSaveHotkey({ handler });
+          useSaveHotkey(handler);
           return () => h('div', [h(Child)]);
         },
       },
@@ -435,7 +441,7 @@ describe('useSaveHotkey', () => {
     const item = mountRoot(
       {
         setup() {
-          useSaveHotkey({ handler });
+          useSaveHotkey(handler);
           return () =>
             h(Suspense, null, {
               default: () => h(Teleport, { to: teleportHost }, [h('button', 'Teleported')]),
@@ -465,7 +471,7 @@ describe('useSaveHotkey', () => {
         setup() {
           onMounted(() => {
             try {
-              useSaveHotkey({ handler: vi.fn() });
+              useSaveHotkey(vi.fn());
             } catch (error) {
               failure = error;
             }
@@ -489,7 +495,7 @@ describe('useSaveHotkey', () => {
         setup() {
           onBeforeMount(() => {
             try {
-              useSaveHotkey({ handler: vi.fn() });
+              useSaveHotkey(vi.fn());
             } catch (error) {
               failure = error;
             }
@@ -512,7 +518,7 @@ describe('useSaveHotkey', () => {
       {
         render() {
           try {
-            useSaveHotkey({ handler: vi.fn() });
+            useSaveHotkey(vi.fn());
           } catch (error) {
             failure = error;
           }

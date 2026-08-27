@@ -1,1 +1,1 @@
-export { useQrconnect } from './use-qrconnect';
+export * from './use-qrconnect';

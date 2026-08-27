@@ -1,1 +1,1 @@
-export { useWecom } from './use-wecom';
+export * from './use-wecom';

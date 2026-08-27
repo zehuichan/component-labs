@@ -12,7 +12,7 @@ const save = () => {
   ElMessage.success(`对话框保存 #${count.value}`);
 };
 
-useSaveHotkey({ handler: save });
+useSaveHotkey(save);
 </script>
 
 <template>

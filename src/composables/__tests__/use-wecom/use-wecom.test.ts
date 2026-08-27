@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createWindowStub } from '../helpers/window-stub';
 
 const { registerMock, getJsApiTicketMock, getAppJsApiTicketMock } = vi.hoisted(() => ({
   registerMock: vi.fn(),
@@ -15,8 +16,14 @@ vi.mock('@/api/signature', () => ({
   getAppJsApiTicket: getAppJsApiTicketMock,
 }));
 
+const WECOM_UA = 'Mozilla/5.0 wxwork/4.0.0 MicroMessenger/7.0.1';
+
 async function loadUseWecom() {
   return import('../../use-wecom/use-wecom');
+}
+
+function wecomWindow(userAgent = WECOM_UA) {
+  return createWindowStub({ navigator: { userAgent } }).window;
 }
 
 describe('useWecom', () => {
@@ -28,24 +35,17 @@ describe('useWecom', () => {
     vi.stubEnv('VITE_WW_JSSDK_ENABLED', 'true');
     vi.stubEnv('VITE_WORK_WECHAT_CORP_ID', 'ww-corp-1');
     vi.stubEnv('VITE_WORK_WECHAT_AGENT_ID', '1000001');
-    vi.stubGlobal('navigator', {
-      userAgent: 'Mozilla/5.0 wxwork/4.0.0 MicroMessenger/7.0.1',
-    });
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
   it('does not initialize outside WeCom', async () => {
-    vi.stubGlobal('navigator', {
-      userAgent: 'Mozilla/5.0 MicroMessenger/8.0.0',
-    });
     const mod = await loadUseWecom();
 
-    const [ready] = mod.useWecom();
+    const { ready } = mod.useWecom({ window: wecomWindow('Mozilla/5.0 MicroMessenger/8.0.0') });
     await Promise.resolve();
     await Promise.resolve();
 
@@ -54,11 +54,11 @@ describe('useWecom', () => {
     expect(getJsApiTicketMock).not.toHaveBeenCalled();
   });
 
-  it('does not initialize when VITE_WW_JSSDK_ENABLED is not true', async () => {
+  it('does not initialize when disabled', async () => {
     vi.stubEnv('VITE_WW_JSSDK_ENABLED', 'false');
     const mod = await loadUseWecom();
 
-    const [ready] = mod.useWecom();
+    const { ready } = mod.useWecom({ window: wecomWindow() });
     await Promise.resolve();
     await Promise.resolve();
 
@@ -79,7 +79,7 @@ describe('useWecom', () => {
     });
     const mod = await loadUseWecom();
 
-    const [ready, sdk] = mod.useWecom();
+    const { ready, ww: sdk } = mod.useWecom({ window: wecomWindow() });
     mod.useWecom();
 
     await vi.waitFor(() => {
@@ -121,11 +121,27 @@ describe('useWecom', () => {
     });
   });
 
+  it('honours explicit corpId and jsApiList over the env defaults', async () => {
+    const mod = await loadUseWecom();
+
+    mod.useWecom({
+      window: wecomWindow(),
+      corpId: 'ww-explicit',
+      jsApiList: ['getLocation'],
+    });
+
+    await vi.waitFor(() => {
+      expect(registerMock).toHaveBeenCalledWith(
+        expect.objectContaining({ corpId: 'ww-explicit', jsApiList: ['getLocation'] }),
+      );
+    });
+  });
+
   it('sets ready false when config fails', async () => {
     const mod = await loadUseWecom();
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const [ready] = mod.useWecom();
+    const { ready } = mod.useWecom({ window: wecomWindow() });
     await vi.waitFor(() => {
       expect(registerMock).toHaveBeenCalled();
     });
@@ -146,7 +162,7 @@ describe('useWecom', () => {
     const mod = await loadUseWecom();
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const [ready] = mod.useWecom();
+    const { ready } = mod.useWecom({ window: wecomWindow() });
     await vi.waitFor(() => {
       expect(registerMock).toHaveBeenCalled();
     });

@@ -80,7 +80,7 @@ describe('useEmitEffect', () => {
   });
 
   it('applies header mutations that need no confirmation', async () => {
-    const api = scope.run(() => useEmitEffect({ rules, initialDraft: initialDraft() }))!;
+    const api = scope.run(() => useEmitEffect(rules, initialDraft()))!;
 
     const ok = await api.changeHeader('multiplier', 3);
     expect(ok).toBe(true);
@@ -90,13 +90,7 @@ describe('useEmitEffect', () => {
 
   it('skips commit when confirm returns false', async () => {
     const confirm = vi.fn(async () => false);
-    const api = scope.run(() =>
-      useEmitEffect({
-        rules,
-        initialDraft: initialDraft(),
-        confirm,
-      }),
-    )!;
+    const api = scope.run(() => useEmitEffect(rules, initialDraft(), { confirm }))!;
 
     const ok = await api.changeHeader('currency', 'USD');
     expect(ok).toBe(false);
@@ -107,11 +101,7 @@ describe('useEmitEffect', () => {
 
   it('commits after confirm returns true', async () => {
     const api = scope.run(() =>
-      useEmitEffect({
-        rules,
-        initialDraft: initialDraft(),
-        confirm: async () => true,
-      }),
+      useEmitEffect(rules, initialDraft(), { confirm: async () => true }),
     )!;
 
     const ok = await api.changeHeader('currency', 'USD');
@@ -120,7 +110,7 @@ describe('useEmitEffect', () => {
   });
 
   it('resets to the initial snapshot', async () => {
-    const api = scope.run(() => useEmitEffect({ rules, initialDraft: initialDraft() }))!;
+    const api = scope.run(() => useEmitEffect(rules, initialDraft()))!;
     await api.changeHeader('multiplier', 3);
     api.reset();
     expect(api.draft.value.summary.total).toBe(10);

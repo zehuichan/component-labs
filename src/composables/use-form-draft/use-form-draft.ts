@@ -1,21 +1,16 @@
+import { readonly, shallowRef, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue';
 import {
-  onScopeDispose,
-  readonly,
-  shallowRef,
-  toValue,
-  watch,
-  type MaybeRefOrGetter,
-  type Ref,
-} from 'vue';
-import { defaultWindow, useTimeoutFn } from '@vueuse/core';
+  defaultWindow,
+  tryOnScopeDispose,
+  useTimeoutFn,
+  type ConfigurableWindow,
+} from '@vueuse/core';
 import { isPlainObject, isString } from 'es-toolkit';
 import { watchReadable } from '../shared/watch-readable';
 
-export interface UseFormDraftOptions<T extends object = Record<string, unknown>> {
-  /** Mutable form state persisted as one JSON object. */
-  form: Ref<T>;
-  /** Complete localStorage key. Key changes never restore or migrate data. */
-  key: MaybeRefOrGetter<string>;
+export interface UseFormDraftOptions<
+  T extends object = Record<string, unknown>,
+> extends ConfigurableWindow {
   /** Whether form changes may currently be persisted. */
   enabled?: MaybeRefOrGetter<boolean>;
   /** Values shallowly merged below a restored draft. */
@@ -45,11 +40,20 @@ export interface UseFormDraftReturn {
  * Persists a form draft in localStorage for crash and refresh recovery.
  *
  * Restoring is explicit so local data cannot silently overwrite server data.
+ *
+ * @param form Mutable form state persisted as one JSON object.
+ * @param key Complete localStorage key. Key changes never restore or migrate data.
+ *
+ * @example
+ * const { restore, clear } = useFormDraft(form, 'order:draft')
+ * onMounted(restore)
  */
 export function useFormDraft<T extends object = Record<string, unknown>>(
-  options: UseFormDraftOptions<T>,
+  form: Ref<T>,
+  key: MaybeRefOrGetter<string>,
+  options: UseFormDraftOptions<T> = {},
 ): UseFormDraftReturn {
-  const { form, key, enabled = true, defaults, debounceMs = 500, onError } = options;
+  const { window = defaultWindow, enabled = true, defaults, debounceMs = 500, onError } = options;
 
   const error = shallowRef<unknown | null>(null);
   let pauseDepth = 0;
@@ -93,7 +97,7 @@ export function useFormDraft<T extends object = Record<string, unknown>>(
 
   const resolveStorage = (): Storage | null => {
     try {
-      const storage = defaultWindow?.localStorage;
+      const storage = window?.localStorage;
       if (!storage) {
         throw new Error('[useFormDraft] localStorage is unavailable.');
       }
@@ -290,10 +294,10 @@ export function useFormDraft<T extends object = Record<string, unknown>>(
     },
   );
 
-  onScopeDispose(() => {
+  tryOnScopeDispose(() => {
     disposed = true;
     cancelScheduledDraft();
-  }, true);
+  });
 
   return {
     error: readonly(error),

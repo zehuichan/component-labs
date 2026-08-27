@@ -1,66 +1,91 @@
+import { defaultWindow, type ConfigurableWindow } from '@vueuse/core';
 import { removeToken, setToken } from './auth';
 
-/**
- * 简版前端单点登录。
- *
- * 在 main.ts 引入即可：`import '@/utils/sso'`
- *
- * 本地测试：
- * `http://localhost:8000/?username=sso&roles=admin&accessToken=eyJhbGciOiJIUzUxMiJ9.demo`
- *
- * 判定为 SSO 后：
- * 1. 清空本地旧信息
- * 2. 把 URL 中的凭证写入本地
- * 3. 从 URL 去掉敏感参数
- * 4. `location.replace` 跳到干净地址
- */
+// 三个都在才认定是 SSO 回调；清理时只抹敏感项，username 留着方便排查
 const MUST = ['username', 'roles', 'accessToken'] as const;
+const SENSITIVE = ['roles', 'accessToken'] as const;
 
-function getQueryMap(href: string): Record<string, string> {
-  const url = new URL(href);
+export type SsoOptions = ConfigurableWindow;
 
-  if (url.search.length > 1) {
-    return Object.fromEntries(url.searchParams.entries());
-  }
-
-  const hash = url.hash;
-  const q = hash.indexOf('?');
-  if (q === -1) return {};
-  return Object.fromEntries(new URLSearchParams(hash.slice(q + 1)).entries());
+interface Credentials {
+  params: URLSearchParams;
+  /** 凭证所在位置，决定清理哪一段 query，避免动到另一段 */
+  from: 'search' | 'hash';
 }
 
-function buildCleanUrl(href: string, params: Record<string, string>): string {
-  const url = new URL(href);
+function getHashQuery(hash: string): URLSearchParams {
+  const start = hash.indexOf('?');
+  return new URLSearchParams(start === -1 ? '' : hash.slice(start + 1));
+}
+
+function readCredentials(url: URL): Credentials | null {
+  const hashParams = getHashQuery(url.hash);
+  if (MUST.every((key) => hashParams.get(key))) return { params: hashParams, from: 'hash' };
+  if (MUST.every((key) => url.searchParams.get(key))) {
+    return { params: url.searchParams, from: 'search' };
+  }
+  return null;
+}
+
+function buildCleanUrl(url: URL, { params, from }: Credentials): string {
   const next = new URLSearchParams(params);
-  for (const key of MUST) {
+  for (const key of SENSITIVE) {
     next.delete(key);
   }
   const query = next.toString();
 
-  const hash = url.hash;
-  if (hash.includes('?')) {
-    const hashPath = hash.slice(0, hash.indexOf('?'));
-    url.search = '';
+  if (from === 'hash') {
+    const hashPath = url.hash.slice(0, url.hash.indexOf('?'));
     url.hash = query ? `${hashPath}?${query}` : hashPath;
-    return url.toString();
+  } else {
+    url.search = query ? `?${query}` : '';
   }
 
-  url.search = query ? `?${query}` : '';
   return url.toString();
 }
 
-export function sso() {
-  const params = getQueryMap(location.href);
-  if (!MUST.every((key) => params[key])) return;
+/**
+ * Frontend single sign-on handoff.
+ *
+ * Detects a callback carrying `username`, `roles`, and `accessToken`, stores the
+ * credentials locally, then replaces the URL with a copy that has the sensitive
+ * params stripped. Works in both history and hash routing modes: the credentials
+ * are read from whichever query string holds them, and only that one is cleaned.
+ *
+ * Local check (history mode):
+ * `http://localhost:8000/?username=sso&roles=admin&accessToken=eyJhbGciOiJIUzUxMiJ9.demo`
+ *
+ * Hash mode, credentials trailing the route:
+ * `http://localhost:8000/#/home?username=sso&roles=admin&accessToken=eyJhbGciOiJIUzUxMiJ9.demo`
+ *
+ * @returns whether the current URL was handled as an SSO callback.
+ *
+ * @example
+ * import { sso } from '@/utils/sso'
+ *
+ * sso()
+ * createApp(App).mount('#app')
+ */
+export function sso(options: SsoOptions = {}): boolean {
+  const { window = defaultWindow } = options;
+  if (!window) return false;
 
+  const { location } = window;
+  const url = new URL(location.href);
+  const credentials = readCredentials(url);
+  if (!credentials) return false;
+
+  const { params } = credentials;
   removeToken();
   setToken({
-    accessToken: params.accessToken,
-    username: params.username,
-    roles: params.roles.split(/[,\s]+/).filter(Boolean),
+    accessToken: params.get('accessToken')!,
+    username: params.get('username')!,
+    roles: params
+      .get('roles')!
+      .split(/[,\s]+/)
+      .filter(Boolean),
   });
 
-  location.replace(buildCleanUrl(location.href, params));
+  location.replace(buildCleanUrl(url, credentials));
+  return true;
 }
-
-sso();

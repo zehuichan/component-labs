@@ -1,4 +1,12 @@
-import { createApp, effectScope, ref, watch, type EffectScope, type Ref } from 'vue';
+import {
+  createApp,
+  effectScope,
+  ref,
+  watch,
+  type EffectScope,
+  type MaybeRefOrGetter,
+  type Ref,
+} from 'vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   useFormDraft,
@@ -11,21 +19,14 @@ interface FormState {
   note?: string;
 }
 
+/** Mirrors the positional signature while keeping the tests declarative. */
+type DraftSetup = UseFormDraftOptions<FormState> & { key?: MaybeRefOrGetter<string> };
+
 describe('useFormDraft', () => {
   let scope: EffectScope;
 
-  const createDraft = (
-    form: Ref<FormState>,
-    options: Partial<UseFormDraftOptions<FormState>> = {},
-  ) => {
-    const draft = scope.run(() =>
-      useFormDraft({
-        form,
-        key: 'draft',
-        debounceMs: 100,
-        ...options,
-      }),
-    );
+  const createDraft = (form: Ref<FormState>, { key = 'draft', ...options }: DraftSetup = {}) => {
+    const draft = scope.run(() => useFormDraft(form, key, { debounceMs: 100, ...options }));
 
     if (!draft) throw new Error('effect scope did not return a draft');
     return draft;
@@ -217,11 +218,7 @@ describe('useFormDraft', () => {
     const onError = vi.fn();
     const form = ref<FormState>({ name: '' });
     const draft = scope.run(() => {
-      const value = useFormDraft({
-        form,
-        key: 'draft',
-        onError,
-      });
+      const value = useFormDraft(form, 'draft', { onError });
       watch(
         value.error,
         (failure) => {
@@ -299,14 +296,14 @@ describe('useFormDraft', () => {
       setup() {
         form = ref<FormState>({ name: '' });
         shouldFail = ref(false);
-        draft = useFormDraft({
+        draft = useFormDraft(
           form,
-          key: () => {
+          () => {
             if (shouldFail.value) throw failure;
             return 'draft';
           },
-          debounceMs: 100,
-        });
+          { debounceMs: 100 },
+        );
         return () => null;
       },
     });

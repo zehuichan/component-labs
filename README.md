@@ -76,6 +76,7 @@ pnpm dev
 - `/composables/use-auto-save`
 - `/composables/use-form-draft`
 - `/composables/use-save-hotkey`
+- `/composables/use-sso`
 
 ### WeChat Composables
 
@@ -122,15 +123,51 @@ import { Filters } from '@/components/filters';
 
 ## Composables
 
-从 `@/composables` 按需导出，主要包括：
+签名对齐 [VueUse](https://github.com/vueuse/vueuse)：主参数位置传入，可选配置走末尾 `options`；多值返回对象（不是元组）。约定细则见 [`.cursor/rules/vueuse-composables.mdc`](.cursor/rules/vueuse-composables.mdc)。
 
-| 模块            | 用途                                   |
-| --------------- | -------------------------------------- |
-| `useEmitEffect` | 单据草稿：表头变更驱动明细副作用与汇总 |
-| `useAutoSave`   | 表单自动保存                           |
-| `useFormDraft`  | 表单草稿持久化                         |
-| `useSaveHotkey` | 保存快捷键注册                         |
-| `useOauth2`     | OAuth2 授权流程                        |
-| `useQrconnect`  | 微信扫码登录（含回调）                 |
-| `useWechat`     | 微信相关封装                           |
-| `useWecom`      | 企业微信 JSSDK                         |
+从 `@/composables` 按需导出：
+
+```ts
+import { useAutoSave, useFormDraft, useSaveHotkey } from '@/composables';
+
+const { restore, flush } = useFormDraft(form, 'workbench:expense-draft');
+const { status, flush: saveNow } = useAutoSave(form, (value, signal) =>
+  api.saveExpense(value, { signal }),
+);
+useSaveHotkey(saveNow);
+```
+
+| 模块            | 签名（简化）                                             | 用途                         |
+| --------------- | -------------------------------------------------------- | ---------------------------- |
+| `useEmitEffect` | `(rules, initialDraft, options?)`                        | 表头变更驱动明细副作用与汇总 |
+| `useAutoSave`   | `(source, save, options?)` → `{ status, flush, … }`      | 防抖自动保存                 |
+| `useFormDraft`  | `(form, key, options?)` → `{ restore, clear, flush, … }` | localStorage 草稿            |
+| `useSaveHotkey` | `(handler, options?)`                                    | Ctrl/Cmd+S                   |
+| `useOauth2`     | `(options?)` → `{ code, authorize }`                     | 微信网页授权                 |
+| `useQrconnect`  | `(options?)` → `{ code, authorize }`                     | 开放平台扫码登录             |
+| `useWechat`     | `(options?)` → `{ ready, wx }`                           | 微信 JSSDK                   |
+| `useWecom`      | `(options?)` → `{ ready, ww }`                           | 企微 JSSDK                   |
+
+浏览器全局与 AppId / 开关通过 `options` 注入（`window`、`appId`、`enabled`、`mode` 等），`import.meta.env` 只作默认值。hash 路由读回调 `code` 时传 `mode: 'hash'`。
+
+SSO 不是 composable：挂载前显式调用 [`sso()`](src/utils/sso.ts)，不要 `import '@/utils/sso'`。
+
+```ts
+import { sso } from '@/utils/sso';
+
+sso();
+createApp(App).use(router).mount('#app');
+```
+
+### 迁移（破坏性）
+
+| 旧写法                                               | 新写法                                                            |
+| ---------------------------------------------------- | ----------------------------------------------------------------- |
+| `useAutoSave({ source, save, debounceMs })`          | `useAutoSave(source, save, { debounceMs })`                       |
+| `useFormDraft({ form, key, … })`                     | `useFormDraft(form, key, { … })`                                  |
+| `useSaveHotkey({ handler, enabled })`                | `useSaveHotkey(handler, { enabled })`                             |
+| `useEmitEffect({ rules, initialDraft, confirm })`    | `useEmitEffect(rules, initialDraft, { confirm })`                 |
+| `const [code, authorize] = useOauth2('snsapi_base')` | `const { code, authorize } = useOauth2({ scope: 'snsapi_base' })` |
+| `const [ready, $wx] = useWechat()`                   | `const { ready, wx } = useWechat()`                               |
+| `const [ready, $ww] = useWecom()`                    | `const { ready, ww } = useWecom()`                                |
+| `import '@/utils/sso'`                               | `import { sso } from '@/utils/sso'` 后调用 `sso()`                |

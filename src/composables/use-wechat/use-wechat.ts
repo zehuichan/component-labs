@@ -1,28 +1,44 @@
-import { ref, type Ref } from 'vue';
-import { createGlobalState } from '@vueuse/core';
+import { shallowRef, type ShallowRef } from 'vue';
+import { createGlobalState, defaultWindow, type ConfigurableWindow } from '@vueuse/core';
 import { getJsApiTicket } from '@/api/signature';
 
-function isWechatBrowser() {
-  return typeof navigator !== 'undefined' && /MicroMessenger/i.test(navigator.userAgent);
+export interface UseWechatOptions extends ConfigurableWindow {
+  /** Whether the bootstrap may run. Defaults to `VITE_JSSDK_ENABLED === 'true'`. */
+  enabled?: boolean;
+}
+
+export interface UseWechatReturn {
+  /** True once `wx.ready` fires. */
+  ready: ShallowRef<boolean>;
+  /** Global `wx`, `undefined` outside the WeChat browser. */
+  wx: WeixinJsSdk | undefined;
+}
+
+function isWechatBrowser(window: Window | undefined): boolean {
+  return /MicroMessenger/i.test(window?.navigator.userAgent ?? '');
 }
 
 /**
- * WeChat JSSDK bootstrap (single global wx.config).
+ * WeChat JSSDK bootstrap (single global `wx.config`).
  *
- * - Skips when not WeChat / VITE_JSSDK_ENABLED !== 'true' / no window.wx
+ * Skips when not inside WeChat, when disabled, or when `window.wx` is absent.
+ * Options apply on the first call only — `createGlobalState` memoises the one
+ * bootstrap shared by the whole app.
  *
  * @example
- * const [ready, $wx] = useWechat()
- * $wx?.scanQRCode?.({ needResult: 1, success: console.log })
+ * const { ready, wx } = useWechat()
+ * wx?.scanQRCode?.({ needResult: 1, success: console.log })
  */
-export const useWechat = createGlobalState((): [Ref<boolean>, WeixinJsSdk | undefined] => {
-  const ready = ref(false);
-  const wx = typeof window !== 'undefined' ? window.wx : undefined;
+export const useWechat = createGlobalState((options: UseWechatOptions = {}): UseWechatReturn => {
+  const { window = defaultWindow, enabled = import.meta.env.VITE_JSSDK_ENABLED === 'true' } =
+    options;
+
+  const ready = shallowRef(false);
+  const wx = window?.wx;
   let pending: Promise<void> | null = null;
-  const enabled = import.meta.env.VITE_JSSDK_ENABLED === 'true';
 
   async function setup() {
-    if (!enabled || !wx || !isWechatBrowser()) {
+    if (!enabled || !wx || !isWechatBrowser(window)) {
       ready.value = false;
       return;
     }
@@ -45,10 +61,10 @@ export const useWechat = createGlobalState((): [Ref<boolean>, WeixinJsSdk | unde
             reject(err);
           });
         });
-      } catch (e) {
+      } catch (error) {
         ready.value = false;
         pending = null;
-        console.error('[wx.config]', e);
+        console.error('[wx.config]', error);
       }
     })();
 
@@ -57,5 +73,5 @@ export const useWechat = createGlobalState((): [Ref<boolean>, WeixinJsSdk | unde
 
   void setup();
 
-  return [ready, wx];
+  return { ready, wx };
 });

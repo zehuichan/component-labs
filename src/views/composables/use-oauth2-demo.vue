@@ -9,7 +9,7 @@ defineOptions({ name: 'UseOauth2Demo' });
 const codeDemo = `import { watch } from 'vue'
 import { useOauth2 } from '@/composables'
 
-const [code, authorize] = useOauth2() // 或 useOauth2('snsapi_base')
+const { code, authorize } = useOauth2() // 或 useOauth2({ scope: 'snsapi_base' })
 
 // 跳转微信授权；可选 redirect 替换当前 pathname（History）
 authorize('/login')
@@ -30,22 +30,37 @@ watch(code, (value) => {
     </template>
 
     <template #api>
-      <DemoApiTable title="Parameters">
+      <DemoApiTable title="UseOauth2Options">
         <tr>
           <td><code>scope</code></td>
           <td><code>'snsapi_base' | 'snsapi_userinfo'</code></td>
           <td>默认 <code>'snsapi_userinfo'</code>。授权作用域。</td>
         </tr>
+        <tr>
+          <td><code>appId</code></td>
+          <td><code>string</code></td>
+          <td>默认取 <code>VITE_WECHAT_APPID</code>。</td>
+        </tr>
+        <tr>
+          <td><code>mode</code></td>
+          <td><code>'history' | 'hash' | 'hash-params'</code></td>
+          <td>默认 <code>'history'</code>。决定回调后从哪一段 query 读 <code>code</code>。</td>
+        </tr>
+        <tr>
+          <td><code>window</code></td>
+          <td><code>Window</code></td>
+          <td>默认 <code>defaultWindow</code>；SSR 下为 <code>undefined</code> 时自动降级。</td>
+        </tr>
       </DemoApiTable>
 
-      <DemoApiTable title="Returns (tuple)">
+      <DemoApiTable title="UseOauth2Return">
         <tr>
-          <td><code>[0] code</code></td>
-          <td><code>Ref&lt;string | undefined&gt;</code></td>
+          <td><code>code</code></td>
+          <td><code>ShallowRef&lt;string | undefined&gt;</code></td>
           <td>URL 上的 OAuth <code>code</code>。</td>
         </tr>
         <tr>
-          <td><code>[1] authorize</code></td>
+          <td><code>authorize</code></td>
           <td><code>(redirect?: string) =&gt; void</code></td>
           <td>跳转微信授权；可选 <code>redirect</code> 替换当前 pathname（History）。</td>
         </tr>

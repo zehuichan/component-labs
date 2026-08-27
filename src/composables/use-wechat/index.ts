@@ -1,1 +1,1 @@
-export { useWechat } from './use-wechat';
+export * from './use-wechat';

@@ -20,7 +20,7 @@ const save = () => {
   ElMessage.success(`主表单保存 #${saveCount.value}`);
 };
 
-useSaveHotkey({ handler: save, enabled, active });
+useSaveHotkey(save, { enabled, active });
 </script>
 
 <template>

@@ -1,80 +1,59 @@
 import { effectScope, type EffectScope } from 'vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useQrconnect } from '../../use-qrconnect/use-qrconnect';
+import { createWindowStub } from '../helpers/window-stub';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 describe('useQrconnect', () => {
   let scope: EffectScope;
-  let hrefSetter: ReturnType<typeof vi.fn<(value: string) => void>>;
 
   beforeEach(() => {
     scope = effectScope();
     vi.stubEnv('VITE_WECHAT_OPEN_APPID', 'wx-open-test');
     vi.stubEnv('VITE_WECHAT_QR_REDIRECT_PATH', '/auth/wechat');
-
-    hrefSetter = vi.fn<(value: string) => void>();
-    const locationMock = {
-      protocol: 'https:',
-      host: 'example.com',
-      pathname: '/login',
-      search: '',
-      hash: '',
-      href: 'https://example.com/login',
-      origin: 'https://example.com',
-    };
-    Object.defineProperty(locationMock, 'href', {
-      configurable: true,
-      get: () => 'https://example.com/login',
-      set: (value: string) => {
-        hrefSetter(value);
-      },
-    });
-    vi.stubGlobal('location', locationMock);
-    window.history.replaceState({}, '', '/login');
   });
 
   afterEach(() => {
     scope.stop();
     vi.unstubAllEnvs();
-    vi.unstubAllGlobals();
     vi.restoreAllMocks();
-    window.history.replaceState({}, '', '/');
   });
 
-  it('syncs code from the URL search params', () => {
-    const search = '?code=oauth-code-1&state=any-state';
-    vi.stubGlobal('location', {
-      protocol: 'https:',
-      host: 'example.com',
-      pathname: '/auth/wechat',
-      search,
-      hash: '',
-      href: `https://example.com/auth/wechat${search}`,
-      origin: 'https://example.com',
+  function run(pathname: string, search: string, options: Parameters<typeof useQrconnect>[0] = {}) {
+    const stub = createWindowStub({
+      location: {
+        protocol: 'https:',
+        host: 'example.com',
+        pathname,
+        search,
+        hash: '',
+        origin: 'https://example.com',
+        href: `https://example.com${pathname}${search}`,
+      },
     });
-    window.history.replaceState({}, '', `/auth/wechat${search}`);
+    const result = scope.run(() => useQrconnect({ window: stub.window, ...options }));
+    if (!result) throw new Error('scope did not return useQrconnect');
+    return { ...result, navigate: stub.navigate };
+  }
 
-    const pair = scope.run(() => useQrconnect());
-    if (!pair) throw new Error('scope did not return useQrconnect');
-    const [code] = pair;
+  it('syncs code from the URL search params', () => {
+    const { code } = run('/auth/wechat', '?code=oauth-code-1&state=any-state');
     expect(code.value).toBe('oauth-code-1');
   });
 
   it('authorize redirects to qrconnect with history redirect_uri', () => {
-    const pair = scope.run(() => useQrconnect());
-    if (!pair) throw new Error('scope did not return useQrconnect');
-    const [, authorize] = pair;
+    const { authorize, navigate } = run('/login', '');
     authorize();
 
-    expect(hrefSetter).toHaveBeenCalledTimes(1);
-    const url = String(hrefSetter.mock.calls[0]?.[0]);
+    expect(navigate).toHaveBeenCalledTimes(1);
+    const url = String(navigate.mock.calls[0]?.[0]);
     expect(url).toContain('https://open.weixin.qq.com/connect/qrconnect?');
     expect(url).toContain('appid=wx-open-test');
     expect(url).toContain('response_type=code');
     expect(url).toContain('scope=snsapi_login');
     expect(url).toContain('#wechat_redirect');
-
-    const state = url.match(/state=([^&#]+)/)?.[1];
-    expect(state).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    expect(url.match(/state=([^&#]+)/)?.[1]).toMatch(UUID_PATTERN);
 
     const redirectUri = decodeURIComponent(url.match(/redirect_uri=([^&]+)/)?.[1] ?? '');
     expect(redirectUri).toBe('https://example.com/auth/wechat');
@@ -82,13 +61,20 @@ describe('useQrconnect', () => {
   });
 
   it('authorize(redirect) replaces redirect_uri pathname', () => {
-    const pair = scope.run(() => useQrconnect());
-    if (!pair) throw new Error('scope did not return useQrconnect');
-    const [, authorize] = pair;
+    const { authorize, navigate } = run('/login', '');
     authorize('/custom/callback');
 
-    const url = String(hrefSetter.mock.calls[0]?.[0]);
+    const url = String(navigate.mock.calls[0]?.[0]);
     const redirectUri = decodeURIComponent(url.match(/redirect_uri=([^&]+)/)?.[1] ?? '');
     expect(redirectUri).toBe('https://example.com/custom/callback');
+  });
+
+  it('honours an explicit redirectPath over the env default', () => {
+    const { authorize, navigate } = run('/login', '', { redirectPath: '/sso/landing' });
+    authorize();
+
+    const url = String(navigate.mock.calls[0]?.[0]);
+    const redirectUri = decodeURIComponent(url.match(/redirect_uri=([^&]+)/)?.[1] ?? '');
+    expect(redirectUri).toBe('https://example.com/sso/landing');
   });
 });

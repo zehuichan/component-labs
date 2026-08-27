@@ -48,10 +48,7 @@ export const linkageSnippet: HomeSnippet = {
   summarize: (lines) => ({ totalAmount: sum(lines, 'amount') }),
 };
 
-const { draft, changeHeader } = useEmitEffect({
-  rules: salesOrderRules,
-  initialDraft: createSalesOrderDraft(),
-});`,
+const { draft, changeHeader } = useEmitEffect(salesOrderRules, createSalesOrderDraft());`,
 };
 
 export const persistSnippet: HomeSnippet = {
@@ -60,17 +57,15 @@ export const persistSnippet: HomeSnippet = {
   lang: 'ts',
   code: `const form = ref(createExpenseForm());
 
-const { restore, flush } = useFormDraft({
-  form,
-  key: 'workbench:expense-draft',
+const { restore, flush } = useFormDraft(form, 'workbench:expense-draft', {
   debounceMs: 500,
 });
 
-const { status, flush: saveNow } = useAutoSave({
-  source: form,
-  save: (value, signal) => api.saveExpense(value, { signal }),
-  debounceMs: 2000,
-});
+const { status, flush: saveNow } = useAutoSave(
+  form,
+  (value, signal) => api.saveExpense(value, { signal }),
+  { debounceMs: 2000 },
+);
 
-useSaveHotkey({ handler: saveNow });`,
+useSaveHotkey(saveNow);`,
 };

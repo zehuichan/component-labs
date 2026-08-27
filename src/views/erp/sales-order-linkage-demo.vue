@@ -19,22 +19,24 @@ defineOptions({ name: 'SalesOrderLinkageDemo' });
 const statusText = ref('单据已载入');
 let nextLineId = 3;
 
-const { draft, changeHeader, changeCell, addLine, removeLine } = useEmitEffect({
-  rules: salesOrderRules,
-  initialDraft: createSalesOrderDraft(),
-  confirm: async (confirmation) => {
-    try {
-      await ElMessageBox.confirm(confirmation.message, '确认传播', {
-        type: 'warning',
-        confirmButtonText: '应用',
-        cancelButtonText: '取消',
-      });
-      return true;
-    } catch {
-      return false;
-    }
+const { draft, changeHeader, changeCell, addLine, removeLine } = useEmitEffect(
+  salesOrderRules,
+  createSalesOrderDraft(),
+  {
+    confirm: async (confirmation) => {
+      try {
+        await ElMessageBox.confirm(confirmation.message, '确认传播', {
+          type: 'warning',
+          confirmButtonText: '应用',
+          cancelButtonText: '取消',
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
   },
-});
+);
 
 async function onHeaderChange(field: string, value: unknown) {
   if (Object.is(draft.value.header[field], value)) return;

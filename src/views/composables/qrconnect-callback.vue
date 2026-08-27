@@ -23,7 +23,7 @@ async function mockExchangeCode(oauthCode: string): Promise<MockToken> {
 }
 
 const router = useRouter();
-const [code] = useQrconnect();
+const { code } = useQrconnect();
 
 const exchanging = ref(false);
 const token = ref<MockToken | undefined>(undefined);

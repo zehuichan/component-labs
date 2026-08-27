@@ -9,7 +9,7 @@ defineOptions({ name: 'UseQrconnectDemo' });
 const loginDemo = `import { useQrconnect } from '@/composables'
 
 // 登录页：整页跳转 qrconnect（固定回调 /auth/wechat）
-const [, authorize] = useQrconnect()
+const { authorize } = useQrconnect()
 authorize('/auth/wechat')`;
 
 const callbackDemo = `import { watch } from 'vue'
@@ -28,7 +28,7 @@ async function mockExchangeCode(code: string) {
 
 // 中间页 /auth/wechat：读 code → 换票
 const router = useRouter()
-const [code] = useQrconnect()
+const { code } = useQrconnect()
 
 watch(
   code,
@@ -63,14 +63,44 @@ watch(
     </template>
 
     <template #api>
-      <DemoApiTable title="Returns (tuple)">
+      <DemoApiTable title="UseQrconnectOptions">
         <tr>
-          <td><code>[0] code</code></td>
-          <td><code>Ref&lt;string | undefined&gt;</code></td>
+          <td><code>appId</code></td>
+          <td><code>string</code></td>
+          <td>默认取 <code>VITE_WECHAT_OPEN_APPID</code>。</td>
+        </tr>
+        <tr>
+          <td><code>redirectPath</code></td>
+          <td><code>string</code></td>
+          <td>
+            <code>authorize()</code>
+            未传参时的回调 path，默认取
+            <code>VITE_WECHAT_QR_REDIRECT_PATH</code>
+            ，再退回
+            <code>/auth/wechat</code>
+            。
+          </td>
+        </tr>
+        <tr>
+          <td><code>mode</code></td>
+          <td><code>'history' | 'hash' | 'hash-params'</code></td>
+          <td>默认 <code>'history'</code>。决定回调后从哪一段 query 读 <code>code</code>。</td>
+        </tr>
+        <tr>
+          <td><code>window</code></td>
+          <td><code>Window</code></td>
+          <td>默认 <code>defaultWindow</code>；SSR 下为 <code>undefined</code> 时自动降级。</td>
+        </tr>
+      </DemoApiTable>
+
+      <DemoApiTable title="UseQrconnectReturn">
+        <tr>
+          <td><code>code</code></td>
+          <td><code>ShallowRef&lt;string | undefined&gt;</code></td>
           <td>URL 上的 OAuth <code>code</code>。</td>
         </tr>
         <tr>
-          <td><code>[1] authorize</code></td>
+          <td><code>authorize</code></td>
           <td><code>(redirect?: string) =&gt; void</code></td>
           <td>
             跳转

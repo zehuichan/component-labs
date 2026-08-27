@@ -10,6 +10,8 @@ Use Node.js ≥20.19 and pnpm ≥10 (`packageManager` pins pnpm 10.33.4). Instal
 
 ## Coding Style & Naming Conventions
 
+Composables under `src/composables/` and browser helpers under `src/utils/` follow [vueuse/vueuse](https://github.com/vueuse/vueuse) conventions; the enforceable rules live in [`.cursor/rules/vueuse-composables.mdc`](.cursor/rules/vueuse-composables.mdc). In short: positional primary args with a trailing options object, exported `UseXxxOptions` / `UseXxxReturn`, object (not tuple) returns, `MaybeRefOrGetter` + `toValue`, `tryOnScopeDispose`, `ConfigurableWindow` instead of reaching for `window` / `import.meta.env`, and no import-time side effects.
+
 We write Vue SFCs and TypeScript. Prettier enforces semicolons, single quotes, and trailing commas (auto-formatted on commit via husky + lint-staged; use `pnpm format` for a full-tree pass). Use `PascalCase` for components and classes, `camelCase` for variables/functions/composables (`useXxx`), and `SCREAMING_SNAKE_CASE` only for exported config constants. File names follow kebab-case (e.g., `use-auto-save.ts`, `playground-sidebar.vue`). Import via path aliases (`@/components`, `@/composables`, `@/ui`, `@/utils`) from `components.json`. For playground / brand / theme UI, read [`DESIGN.md`](DESIGN.md) first and keep tokens aligned with `src/styles/tailwind.css`; previews live at `docs/brand/preview.html`. Prefer existing shadcn-vue primitives under `src/ui/` over ad-hoc controls.
 
 ## Testing Guidelines

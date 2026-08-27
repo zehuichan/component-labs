@@ -4,11 +4,11 @@ import {
   onActivated,
   onDeactivated,
   onMounted,
-  onScopeDispose,
   toValue,
   watch,
   type MaybeRefOrGetter,
 } from 'vue';
+import { tryOnScopeDispose } from '@vueuse/core';
 
 import { registerSaveHotkey } from './save-hotkey-registry';
 
@@ -68,9 +68,10 @@ function collectRenderedElements(
   return result;
 }
 
+/** Save operation shared with the primary save action. */
+export type SaveHotkeyHandler = () => void | Promise<void>;
+
 export interface UseSaveHotkeyOptions {
-  /** Save operation shared with the primary save action. */
-  handler: () => void | Promise<void>;
   /** Whether the registered entry may currently execute. */
   enabled?: MaybeRefOrGetter<boolean>;
   /** Whether a mounted page or dialog currently owns the shortcut. */
@@ -85,9 +86,17 @@ export interface UseSaveHotkeyOptions {
  *
  * Nested scopes outrank ancestors and same-depth registrations use LIFO
  * priority. A disabled owner intentionally blocks lower entries.
+ *
+ * @param handler Save operation shared with the primary save action.
+ *
+ * @example
+ * useSaveHotkey(submit, { enabled: () => !pending.value })
  */
-export function useSaveHotkey(options: UseSaveHotkeyOptions): void {
-  const { handler, enabled = true, active = true, onError } = options;
+export function useSaveHotkey(
+  handler: SaveHotkeyHandler,
+  options: UseSaveHotkeyOptions = {},
+): void {
+  const { enabled = true, active = true, onError } = options;
   const instance = getCurrentInstance();
   // Reject bare effect scopes, post-mount hooks such as onMounted/onActivated,
   // lifecycle callbacks with a mismatched scope such as onBeforeMount, and the
@@ -218,5 +227,5 @@ export function useSaveHotkey(options: UseSaveHotkeyOptions): void {
   onMounted(activate);
   onActivated(activate);
   onDeactivated(deactivate);
-  onScopeDispose(deactivate);
+  tryOnScopeDispose(deactivate);
 }
