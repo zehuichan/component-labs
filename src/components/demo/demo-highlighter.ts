@@ -19,7 +19,7 @@ function getHighlighter(): Promise<Highlighter> {
   if (!highlighterPromise) {
     highlighterPromise = createHighlighter({
       themes: [...THEMES],
-      langs: ['typescript', 'vue', 'javascript'],
+      langs: ['typescript', 'vue', 'javascript', 'json'],
     });
   }
   return highlighterPromise;

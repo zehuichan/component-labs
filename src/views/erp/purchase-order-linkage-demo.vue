@@ -1,118 +1,128 @@
 <script setup lang="ts">
-import { ElMessageBox } from 'element-plus';
-import { ref } from 'vue';
+import { ElMessage } from 'element-plus';
+import { cloneDeep } from 'es-toolkit';
+import { computed, ref } from 'vue';
 import DemoBlock from '@/components/demo/demo-block.vue';
+import DemoCode from '@/components/demo/demo-code.vue';
 import DemoPage from '@/components/demo/demo-page.vue';
+import DocumentSummaryBar from '@/components/demo/document-summary-bar.vue';
+import ManualFieldTags from '@/components/demo/manual-field-tags.vue';
+import { useConfirmDialog } from '@/components/demo/use-confirm-dialog';
 import { PlusTable } from '@/components/plus-table';
-import type { CellChangePayload } from '@/components/plus-table';
-import { useEmitEffect, type DocumentLine } from '@/composables';
-import { CURRENCY_OPTIONS, WAREHOUSE_OPTIONS, formatSource } from './emit-helpers';
+import { useEmitEffect } from '@/composables';
+import { createTempIdFactory } from './emit-helpers';
+import { CURRENCY_OPTIONS, SUPPLIER_OPTIONS, WAREHOUSE_OPTIONS } from './mock-master-data';
 import {
-  PURCHASE_SUPPLIER_OPTIONS,
-  createPurchaseOrderDraft,
+  PURCHASE_FIELD_LABELS,
+  createPurchaseLine,
+  createPurchaseOrderSeed,
+  defaultPurchaseOrderForm,
   purchaseOrderColumns,
+  purchaseOrderManualFields,
   purchaseOrderRules,
+  type PurchaseOrderForm,
+  type PurchaseOrderLine,
 } from './purchase-order-linkage';
 
 defineOptions({ name: 'PurchaseOrderLinkageDemo' });
 
-const statusText = ref('单据已载入');
-let nextLineId = 3;
+const form = ref<PurchaseOrderForm>(cloneDeep(defaultPurchaseOrderForm));
+const { pending, isManual, restore, normalize } = useEmitEffect(form, purchaseOrderRules, {
+  confirm: useConfirmDialog(PURCHASE_FIELD_LABELS),
+  immediate: true,
+});
 
-const { draft, changeHeader, changeCell, addLine, removeLine } = useEmitEffect(
-  purchaseOrderRules,
-  createPurchaseOrderDraft(),
-  {
-    confirm: async (confirmation) => {
-      try {
-        await ElMessageBox.confirm(confirmation.message, '确认传播', {
-          type: 'warning',
-          confirmButtonText: '应用',
-          cancelButtonText: '取消',
-        });
-        return true;
-      } catch {
-        return false;
-      }
-    },
-  },
-);
+const nextId = createTempIdFactory();
+const submitted = ref('');
 
-async function onHeaderChange(field: string, value: unknown) {
-  if (Object.is(draft.value.header[field], value)) return;
-  const ok = await changeHeader(field, value);
-  statusText.value = ok ? `已应用表头「${field}」变更` : '已取消表头传播';
+const summary = computed(() => [
+  { label: '数量合计', value: form.value.totalQty },
+  { label: '价税合计', value: form.value.totalAmount },
+  { label: '本位币合计', value: form.value.totalLocalAmount, primary: true },
+]);
+
+function loadSeed() {
+  form.value = createPurchaseOrderSeed();
+  submitted.value = '';
 }
 
-async function onCellChange(payload: CellChangePayload<DocumentLine>) {
-  const ok = await changeCell({
-    rowId: payload.row.id,
-    prop: payload.prop,
-    value: payload.value,
-    oldValue: payload.oldValue,
-  });
-  if (!ok) {
-    payload.row[payload.prop] = payload.oldValue;
-    return;
-  }
-  statusText.value = `已更新明细「${payload.prop}」并重算汇总`;
+async function newDocument() {
+  form.value = cloneDeep(defaultPurchaseOrderForm);
+  submitted.value = '';
+  await normalize();
 }
 
-function onAddLine() {
-  addLine(String(nextLineId++));
-  statusText.value = '已新增明细并重新汇总';
+function addLine() {
+  form.value.lines.push(createPurchaseLine(nextId()));
 }
 
-async function onRemoveLine(id: string) {
-  if (draft.value.lines.length <= 1) return;
-  try {
-    await ElMessageBox.confirm('删除后将重新汇总整张单据。', '删除明细', {
-      type: 'warning',
-    });
-    removeLine(id);
-    statusText.value = '已删除明细并重新汇总';
-  } catch {
-    /* cancelled */
-  }
+function removeLine(row: PurchaseOrderLine) {
+  const index = form.value.lines.indexOf(row);
+  if (index >= 0) form.value.lines.splice(index, 1);
+}
+
+async function submit() {
+  await normalize();
+  submitted.value = JSON.stringify(form.value, null, 2);
+  ElMessage.success('已生成提交数据，见下方 JSON');
 }
 </script>
 
 <template>
   <DemoPage width="wide">
     <template #description>
-      采购订单演示表头→明细副作用：币种
-      <code>force</code>（默认汇率时改币种会带出新汇率）、仓库/税率
-      <code>inherit</code>、供应商/汇率
-      <code>recalculate</code>。明细改仓库/税率/单价后标记为人工值；本位币
-      <code>amount × exchangeRate</code>。手改汇率后改币种不覆盖。
+      采购订单：与销售订单同一套引擎、同一种写法。供应商带出账期（可手改）并异步重取采购价（弹确认、手改价保留）；改币种带出汇率并同步明细；仓库
+      / 税率下发到未手改的行。
     </template>
 
     <DemoBlock>
       <template #hint>
-        改币种时若汇率仍是旧币种默认值会带出新默认汇率；手改汇率后改币种会保留。状态：{{
-          statusText
-        }}
+        试试：先手改第 2 行采购单价，再切换供应商——确认框会说明「重算 1 处、保留 1 处」；改第 2
+        行物料则手改价失效并重新取价。
       </template>
 
-      <el-form class="erp-page__header" label-position="top" :model="draft.header">
-        <el-form-item label="供应商 · 触发重算">
-          <el-select
-            :model-value="draft.header.supplierId"
-            @change="onHeaderChange('supplierId', $event)"
-          >
+      <div class="mb-3 flex flex-wrap items-center gap-2">
+        <el-button @click="loadSeed">载入示例单据</el-button>
+        <el-button @click="newDocument">新建空单</el-button>
+        <el-button type="primary" :loading="pending" @click="submit">提交</el-button>
+        <span class="demo__meta">{{ form.documentNo ?? '未保存单据' }}</span>
+      </div>
+
+      <el-form class="erp-page__header" label-position="top" :model="form">
+        <el-form-item label="供应商 · 带出账期，重取单价">
+          <el-select v-model="form.supplierId" placeholder="选择供应商">
             <el-option
-              v-for="option in PURCHASE_SUPPLIER_OPTIONS"
+              v-for="option in SUPPLIER_OPTIONS"
               :key="option.value"
               :label="option.label"
               :value="option.value"
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="结算币种 · 强制同步">
-          <el-select
-            :model-value="draft.header.currency"
-            @change="onHeaderChange('currency', $event)"
-          >
+        <el-form-item>
+          <template #label>
+            账期（天）· 供应商带出
+            <el-tag
+              v-if="isManual('paymentTermDays')"
+              class="ml-1"
+              size="small"
+              type="warning"
+              closable
+              @close="restore('paymentTermDays')"
+            >
+              手改
+            </el-tag>
+          </template>
+          <el-input-number
+            v-model="form.paymentTermDays"
+            class="w-full!"
+            :min="0"
+            :step="15"
+            controls-position="right"
+          />
+        </el-form-item>
+        <el-form-item label="币种 · 明细强制同步">
+          <el-select v-model="form.currency">
             <el-option
               v-for="option in CURRENCY_OPTIONS"
               :key="option.value"
@@ -121,22 +131,31 @@ async function onRemoveLine(id: string) {
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="汇率 · 触发重算">
+        <el-form-item>
+          <template #label>
+            汇率 · 币种带出
+            <el-tag
+              v-if="isManual('exchangeRate')"
+              class="ml-1"
+              size="small"
+              type="warning"
+              closable
+              @close="restore('exchangeRate')"
+            >
+              手改
+            </el-tag>
+          </template>
           <el-input-number
+            v-model="form.exchangeRate"
             class="w-full!"
-            :model-value="Number(draft.header.exchangeRate)"
             :min="0.01"
             :step="0.1"
-            :precision="2"
+            :precision="4"
             controls-position="right"
-            @change="onHeaderChange('exchangeRate', $event)"
           />
         </el-form-item>
-        <el-form-item label="收货仓库 · 继承传播">
-          <el-select
-            :model-value="draft.header.warehouseId"
-            @change="onHeaderChange('warehouseId', $event)"
-          >
+        <el-form-item label="收货仓库 · 明细继承">
+          <el-select v-model="form.warehouseId">
             <el-option
               v-for="option in WAREHOUSE_OPTIONS"
               :key="option.value"
@@ -145,86 +164,46 @@ async function onRemoveLine(id: string) {
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="默认税率 · 继承传播">
+        <el-form-item label="默认税率 · 明细继承">
           <el-input-number
+            v-model="form.taxRate"
             class="w-full!"
-            :model-value="Number(draft.header.taxRate)"
             :min="0"
             :max="1"
             :step="0.01"
             :precision="2"
             controls-position="right"
-            @change="onHeaderChange('taxRate', $event)"
           />
         </el-form-item>
       </el-form>
 
-      <PlusTable
-        :data="draft.lines"
-        :columns="purchaseOrderColumns"
-        row-key="id"
-        mode="cell"
-        border
-        @cell-change="onCellChange"
-      >
+      <PlusTable :data="form.lines" :columns="purchaseOrderColumns" row-key="id" mode="cell" border>
         <template #toolbar>
-          <el-button type="primary" @click="onAddLine">新增明细</el-button>
+          <el-button type="primary" @click="addLine">新增明细</el-button>
         </template>
         <template #cell-source="{ row }">
-          {{ formatSource(row, ['unitPrice', 'warehouseId', 'taxRate']) }}
+          <ManualFieldTags
+            :row="row"
+            :fields="purchaseOrderManualFields"
+            :labels="PURCHASE_FIELD_LABELS"
+            :is-manual="isManual"
+            @restore="restore([row, $event])"
+          />
         </template>
         <template #cell-actions="{ row }">
-          <el-button
-            type="danger"
-            link
-            :disabled="draft.lines.length <= 1"
-            @click.stop="onRemoveLine(row.id)"
-          >
-            删除
-          </el-button>
+          <el-button type="danger" link @click.stop="removeLine(row)">删除</el-button>
         </template>
       </PlusTable>
 
-      <div
-        class="mt-3 flex flex-wrap items-end gap-x-6 gap-y-3 border-t border-[var(--el-border-color-lighter)] pt-3"
-      >
-        <div class="min-w-28">
-          <div class="text-xs text-[var(--el-text-color-secondary)]">数量合计</div>
-          <div
-            class="mt-0.5 font-mono text-lg font-semibold tabular-nums tracking-tight text-[var(--el-text-color-primary)]"
-          >
-            {{ draft.summary.totalQty ?? 0 }}
-          </div>
-        </div>
-        <div class="min-w-28">
-          <div class="text-xs text-[var(--el-text-color-secondary)]">价税合计</div>
-          <div
-            class="mt-0.5 font-mono text-lg font-semibold tabular-nums tracking-tight text-[var(--el-text-color-primary)]"
-          >
-            {{ draft.summary.totalAmount ?? 0 }}
-          </div>
-        </div>
-        <div class="min-w-28">
-          <div class="text-xs text-[var(--el-text-color-secondary)]">本位币合计</div>
-          <div
-            class="mt-0.5 font-mono text-lg font-semibold tabular-nums tracking-tight text-[var(--el-color-primary)]"
-          >
-            {{ draft.summary.totalLocalAmount ?? 0 }}
-          </div>
-        </div>
-        <div class="ml-auto flex items-center self-center">
-          <span
-            class="rounded-full px-2.5 py-0.5 text-xs font-medium"
-            :class="
-              draft.dirty
-                ? 'bg-[var(--el-color-warning-light-9)] text-[var(--el-color-warning-dark-2)]'
-                : 'bg-[var(--el-color-success-light-9)] text-[var(--el-color-success-dark-2)]'
-            "
-          >
-            {{ draft.dirty ? '有未保存修改' : '干净草稿' }}
-          </span>
-        </div>
-      </div>
+      <DocumentSummaryBar :items="summary" :pending="pending" />
+
+      <DemoCode
+        v-if="submitted"
+        class="mt-4"
+        :code="submitted"
+        lang="json"
+        title="提交的 form（normalize 后）"
+      />
     </DemoBlock>
   </DemoPage>
 </template>

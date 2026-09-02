@@ -16,6 +16,7 @@ import ErpApiOverview from '@/views/erp/api-overview.vue';
 import ExpenseReportLinkageDemo from '@/views/erp/expense-report-linkage-demo.vue';
 import PurchaseOrderLinkageDemo from '@/views/erp/purchase-order-linkage-demo.vue';
 import SalesOrderLinkageDemo from '@/views/erp/sales-order-linkage-demo.vue';
+import SupplierQuotationLinkageDemo from '@/views/erp/supplier-quotation-linkage-demo.vue';
 import FiltersApiOverview from '@/views/filters/api-overview.vue';
 import FiltersBasicDemo from '@/views/filters/basic-demo.vue';
 import FiltersPresetDemo from '@/views/filters/preset-demo.vue';
@@ -121,6 +122,12 @@ export const router = createRouter({
           name: 'erp-expense-report-linkage',
           component: ExpenseReportLinkageDemo,
           meta: { title: '费用报销联动', group: 'ERP 场景', order: 3, badge: 'beta' },
+        },
+        {
+          path: 'erp/supplier-quotation-linkage',
+          name: 'erp-supplier-quotation-linkage',
+          component: SupplierQuotationLinkageDemo,
+          meta: { title: '供应商报价（多子表）', group: 'ERP 场景', order: 4, badge: 'beta' },
         },
         {
           path: 'composables/use-auto-save',

@@ -1,169 +1,153 @@
 import type { PlusTableColumnDef } from '@/components/plus-table';
-import type { DocumentDraft, DocumentLine, EmitEffectRules } from '@/composables';
+import { defineEmitRules } from '@/composables';
+import { money, optionLabel, sum } from './emit-helpers';
 import {
   CURRENCY_OPTIONS,
+  EXCHANGE_RATES,
+  MATERIAL_OPTIONS,
   WAREHOUSE_OPTIONS,
-  forceCurrencyWithRate,
-  inheritField,
-  money,
-  optionLabel,
-  repriceInheritedField,
-  sum,
-  type SelectOption,
-} from './emit-helpers';
+  fetchPurchasePrice,
+  supplierOf,
+} from './mock-master-data';
 
-export const PURCHASE_SUPPLIER_OPTIONS: SelectOption[] = [
-  { label: '华南电子', value: 'supplier-south' },
-  { label: '精工材料', value: 'supplier-material' },
-];
+export interface PurchaseOrderLine {
+  id: number;
+  materialId: string | null;
+  quantity: number | null;
+  currency: string | null;
+  warehouseId: string | null;
+  unitPrice: number | null;
+  taxRate: number | null;
+  amount: number | null;
+  localAmount: number | null;
+}
 
-export const PURCHASE_MATERIAL_OPTIONS: SelectOption[] = [
-  { label: '显示器面板', value: 'panel' },
-  { label: '控制芯片', value: 'chip' },
-  { label: '包装箱', value: 'package' },
-];
+export interface PurchaseOrderForm {
+  id: number | null;
+  documentNo: string | null;
+  supplierId: string | null;
+  paymentTermDays: number | null;
+  currency: string | null;
+  exchangeRate: number | null;
+  warehouseId: string | null;
+  taxRate: number | null;
+  totalQty: number | null;
+  totalAmount: number | null;
+  totalLocalAmount: number | null;
+  lines: PurchaseOrderLine[];
+}
 
-const BASE_PRICES: Record<string, number> = {
-  panel: 950,
-  chip: 320,
-  package: 18,
+export const defaultPurchaseOrderForm: PurchaseOrderForm = {
+  id: null,
+  documentNo: null,
+  supplierId: null,
+  paymentTermDays: null,
+  currency: 'CNY',
+  exchangeRate: null,
+  warehouseId: 'WH-SH',
+  taxRate: 0.13,
+  totalQty: null,
+  totalAmount: null,
+  totalLocalAmount: null,
+  lines: [],
 };
 
-function resolvePurchasePrice(line: DocumentLine, header: Record<string, unknown>): number {
-  const base = BASE_PRICES[String(line.materialId)] ?? 0;
-  const supplierFactor = header.supplierId === 'supplier-material' ? 0.94 : 1;
-  return money(base * supplierFactor);
-}
-
-function recalculatePurchaseLine(
-  line: DocumentLine,
-  header: Record<string, unknown>,
-): DocumentLine {
-  const next: DocumentLine = {
-    ...line,
-    fieldSources: { ...line.fieldSources },
+export function createPurchaseLine(id: number): PurchaseOrderLine {
+  return {
+    id,
+    materialId: null,
+    quantity: 1,
+    currency: null,
+    warehouseId: null,
+    unitPrice: null,
+    taxRate: null,
+    amount: null,
+    localAmount: null,
   };
-  next.currency = header.currency;
-  if (next.fieldSources.warehouseId !== 'manual') {
-    next.warehouseId = header.warehouseId;
-  }
-  if (next.fieldSources.taxRate !== 'manual') {
-    next.taxRate = header.taxRate;
-  }
-  if (next.fieldSources.unitPrice !== 'manual') {
-    next.unitPrice = resolvePurchasePrice(next, header);
-  } else {
-    next.unitPrice = money(next.unitPrice);
-  }
-
-  const quantity = Number(next.quantity ?? 0);
-  const unitPrice = Number(next.unitPrice ?? 0);
-  const taxRate = Number(next.taxRate ?? 0);
-  next.amount = money(quantity * unitPrice * (1 + taxRate));
-  next.localAmount = money(Number(next.amount) * Number(header.exchangeRate ?? 0));
-  return next;
 }
 
-function createPurchaseLine(draft: DocumentDraft, id: string): DocumentLine {
-  return recalculatePurchaseLine(
-    {
-      id,
-      fieldSources: {
-        unitPrice: 'inherited',
-        warehouseId: 'inherited',
-        taxRate: 'inherited',
-      },
-      materialId: 'package',
-      quantity: 1,
-      currency: draft.header.currency,
-      warehouseId: draft.header.warehouseId,
-      unitPrice: 0,
-      taxRate: draft.header.taxRate,
-      amount: 0,
-    },
-    draft.header,
-  );
-}
-
-export function createPurchaseOrderDraft(): DocumentDraft {
-  const header = {
+export function createPurchaseOrderSeed(): PurchaseOrderForm {
+  return {
+    id: 2001,
     documentNo: 'PO-20260717-001',
     supplierId: 'supplier-south',
+    paymentTermDays: 30,
     currency: 'CNY',
     exchangeRate: 1,
     warehouseId: 'WH-SH',
     taxRate: 0.13,
-  };
-  const draft: DocumentDraft = {
-    dirty: false,
-    header,
-    lines: [],
-    summary: {},
-  };
-
-  draft.lines = [
-    recalculatePurchaseLine(
+    totalQty: 30,
+    totalAmount: 17967,
+    totalLocalAmount: 17967,
+    lines: [
       {
-        ...createPurchaseLine(draft, '1'),
+        id: 1,
         materialId: 'panel',
         quantity: 10,
+        currency: 'CNY',
+        warehouseId: 'WH-SH',
+        unitPrice: 950,
+        taxRate: 0.13,
+        amount: 10735,
+        localAmount: 10735,
       },
-      header,
-    ),
-    recalculatePurchaseLine(
       {
-        ...createPurchaseLine(draft, '2'),
+        id: 2,
         materialId: 'chip',
         quantity: 20,
+        currency: 'CNY',
         warehouseId: 'WH-BJ',
-        fieldSources: {
-          unitPrice: 'inherited',
-          warehouseId: 'manual',
-          taxRate: 'inherited',
-        },
+        unitPrice: 320,
+        taxRate: 0.13,
+        amount: 7232,
+        localAmount: 7232,
       },
-      header,
-    ),
-  ];
-  draft.summary = {
-    totalQty: sum(draft.lines, 'quantity'),
-    totalAmount: sum(draft.lines, 'amount'),
-    totalLocalAmount: sum(draft.lines, 'localAmount'),
+    ],
   };
-  return draft;
 }
 
-export const purchaseOrderRules: EmitEffectRules = {
-  sourceFields: ['unitPrice', 'warehouseId', 'taxRate'],
-  headerRules: {
-    supplierId: repriceInheritedField('unitPrice', resolvePurchasePrice),
-    currency: forceCurrencyWithRate(),
-    exchangeRate: {
-      policy: 'recalculate',
-      requiresConfirmation: true,
-      apply: () => ({}),
+export const purchaseOrderRules = defineEmitRules<PurchaseOrderForm>({
+  paymentTermDays: { default: ({ form }) => supplierOf(form.supplierId)?.paymentTermDays },
+  exchangeRate: { default: ({ form }) => EXCHANGE_RATES[form.currency ?? ''] },
+  totalQty: ({ form }) => sum(form.lines, 'quantity'),
+  totalAmount: ({ form }) => sum(form.lines, 'amount'),
+  totalLocalAmount: ({ form }) => sum(form.lines, 'localAmount'),
+  lines: {
+    currency: ({ form }) => form.currency,
+    warehouseId: { default: ({ form }) => form.warehouseId },
+    taxRate: { default: ({ form }) => form.taxRate },
+    unitPrice: {
+      default: ({ row, form }) => fetchPurchasePrice(row.materialId, form.supplierId),
+      confirm: true,
     },
-    warehouseId: inheritField('warehouseId', 'warehouseId'),
-    taxRate: inheritField('taxRate', 'taxRate'),
+    amount: ({ row }) =>
+      money((row.quantity ?? 0) * (row.unitPrice ?? 0) * (1 + (row.taxRate ?? 0))),
+    localAmount: ({ row, form }) => money((row.amount ?? 0) * (form.exchangeRate ?? 0)),
   },
-  createLine: createPurchaseLine,
-  recalculateLine: recalculatePurchaseLine,
-  summarize: (lines) => ({
-    totalQty: sum(lines, 'quantity'),
-    totalAmount: sum(lines, 'amount'),
-    totalLocalAmount: sum(lines, 'localAmount'),
-  }),
+});
+
+export const PURCHASE_FIELD_LABELS: Record<string, string> = {
+  supplierId: '供应商',
+  currency: '币种',
+  paymentTermDays: '账期',
+  exchangeRate: '汇率',
+  warehouseId: '仓库',
+  taxRate: '税率',
+  unitPrice: '采购单价',
 };
+
+export const purchaseOrderManualFields = ['warehouseId', 'taxRate', 'unitPrice'] as const;
 
 export const purchaseOrderColumns: PlusTableColumnDef[] = [
   { type: 'index', label: '#', width: 54 },
   {
     prop: 'materialId',
     label: '物料',
+    minWidth: 140,
     editable: true,
     component: 'select',
-    componentProps: { options: PURCHASE_MATERIAL_OPTIONS },
-    formatter: (row: DocumentLine) => optionLabel(PURCHASE_MATERIAL_OPTIONS, row.materialId),
+    componentProps: { options: MATERIAL_OPTIONS },
+    formatter: (row: PurchaseOrderLine) => optionLabel(MATERIAL_OPTIONS, row.materialId),
   },
   {
     prop: 'quantity',
@@ -177,8 +161,7 @@ export const purchaseOrderColumns: PlusTableColumnDef[] = [
     prop: 'currency',
     label: '币种',
     width: 110,
-    editable: false,
-    formatter: (row: DocumentLine) => optionLabel(CURRENCY_OPTIONS, row.currency),
+    formatter: (row: PurchaseOrderLine) => optionLabel(CURRENCY_OPTIONS, row.currency),
   },
   {
     prop: 'warehouseId',
@@ -187,7 +170,7 @@ export const purchaseOrderColumns: PlusTableColumnDef[] = [
     editable: true,
     component: 'select',
     componentProps: { options: WAREHOUSE_OPTIONS },
-    formatter: (row: DocumentLine) => optionLabel(WAREHOUSE_OPTIONS, row.warehouseId),
+    formatter: (row: PurchaseOrderLine) => optionLabel(WAREHOUSE_OPTIONS, row.warehouseId),
   },
   {
     prop: 'unitPrice',
@@ -205,24 +188,8 @@ export const purchaseOrderColumns: PlusTableColumnDef[] = [
     component: 'input-number',
     componentProps: { min: 0, max: 1, step: 0.01, precision: 2 },
   },
-  {
-    prop: 'amount',
-    label: '价税合计',
-    width: 120,
-    editable: false,
-  },
-  {
-    prop: 'localAmount',
-    label: '本位币金额',
-    width: 120,
-    editable: false,
-  },
-  { prop: 'source', label: '字段来源', editable: false },
-  {
-    prop: 'actions',
-    type: 'operation',
-    label: '操作',
-    width: 76,
-    fixed: 'right',
-  },
+  { prop: 'amount', label: '价税合计', width: 120 },
+  { prop: 'localAmount', label: '本位币金额', width: 120 },
+  { prop: 'source', label: '人工值', minWidth: 160 },
+  { prop: 'actions', type: 'operation', label: '操作', width: 76, fixed: 'right' },
 ];

@@ -1,131 +1,146 @@
 <script setup lang="ts">
-import { ElMessageBox } from 'element-plus';
-import { ref } from 'vue';
+import { ElMessage } from 'element-plus';
+import { cloneDeep } from 'es-toolkit';
+import { computed, ref } from 'vue';
 import DemoBlock from '@/components/demo/demo-block.vue';
+import DemoCode from '@/components/demo/demo-code.vue';
 import DemoPage from '@/components/demo/demo-page.vue';
+import DocumentSummaryBar from '@/components/demo/document-summary-bar.vue';
+import ManualFieldTags from '@/components/demo/manual-field-tags.vue';
+import { useConfirmDialog } from '@/components/demo/use-confirm-dialog';
 import { PlusTable } from '@/components/plus-table';
-import type { CellChangePayload } from '@/components/plus-table';
-import { useEmitEffect, type DocumentLine } from '@/composables';
-import { CURRENCY_OPTIONS, formatSource } from './emit-helpers';
+import { useEmitEffect } from '@/composables';
+import { createTempIdFactory } from './emit-helpers';
 import {
-  EXPENSE_DEPARTMENT_OPTIONS,
-  EXPENSE_PROJECT_OPTIONS,
-  createExpenseReportDraft,
+  CURRENCY_OPTIONS,
+  DEPARTMENT_OPTIONS,
+  EMPLOYEE_OPTIONS,
+  PROJECT_OPTIONS,
+} from './mock-master-data';
+import {
+  EXPENSE_FIELD_LABELS,
+  createExpenseLine,
+  createExpenseReportSeed,
+  defaultExpenseReportForm,
   expenseReportColumns,
+  expenseReportManualFields,
   expenseReportRules,
+  type ExpenseLine,
+  type ExpenseReportForm,
 } from './expense-report-linkage';
 
 defineOptions({ name: 'ExpenseReportLinkageDemo' });
 
-const statusText = ref('单据已载入');
-let nextLineId = 3;
+const form = ref<ExpenseReportForm>(cloneDeep(defaultExpenseReportForm));
+const { pending, isManual, restore, normalize } = useEmitEffect(form, expenseReportRules, {
+  confirm: useConfirmDialog(EXPENSE_FIELD_LABELS),
+  immediate: true,
+});
 
-const { draft, changeHeader, changeCell, addLine, removeLine } = useEmitEffect(
-  expenseReportRules,
-  createExpenseReportDraft(),
-  {
-    confirm: async (confirmation) => {
-      try {
-        await ElMessageBox.confirm(confirmation.message, '确认传播', {
-          type: 'warning',
-          confirmButtonText: '应用',
-          cancelButtonText: '取消',
-        });
-        return true;
-      } catch {
-        return false;
-      }
-    },
-  },
-);
+const nextId = createTempIdFactory();
+const submitted = ref('');
 
-async function onHeaderChange(field: string, value: unknown) {
-  if (Object.is(draft.value.header[field], value)) return;
-  const ok = await changeHeader(field, value);
-  statusText.value = ok ? `已应用表头「${field}」变更` : '已取消表头传播';
+const summary = computed(() => [
+  { label: '原币合计', value: form.value.totalAmount },
+  { label: '可抵扣税额', value: form.value.totalDeductibleTax },
+  { label: '本位币合计', value: form.value.totalLocalAmount },
+  { label: '应付金额（扣预借）', value: form.value.payableAmount, primary: true },
+]);
+
+function loadSeed() {
+  form.value = createExpenseReportSeed();
+  submitted.value = '';
 }
 
-async function onCellChange(payload: CellChangePayload<DocumentLine>) {
-  const ok = await changeCell({
-    rowId: payload.row.id,
-    prop: payload.prop,
-    value: payload.value,
-    oldValue: payload.oldValue,
-  });
-  if (!ok) {
-    payload.row[payload.prop] = payload.oldValue;
-    return;
-  }
-  statusText.value = `已更新明细「${payload.prop}」并重算汇总`;
+async function newDocument() {
+  form.value = cloneDeep(defaultExpenseReportForm);
+  submitted.value = '';
+  await normalize();
 }
 
-function onAddLine() {
-  addLine(String(nextLineId++));
-  statusText.value = '已新增明细并重新汇总';
+function addLine() {
+  form.value.lines.push(createExpenseLine(nextId()));
 }
 
-async function onRemoveLine(id: string) {
-  if (draft.value.lines.length <= 1) return;
-  try {
-    await ElMessageBox.confirm('删除后将重新汇总整张单据。', '删除明细', {
-      type: 'warning',
-    });
-    removeLine(id);
-    statusText.value = '已删除明细并重新汇总';
-  } catch {
-    /* cancelled */
-  }
+function removeLine(row: ExpenseLine) {
+  const index = form.value.lines.indexOf(row);
+  if (index >= 0) form.value.lines.splice(index, 1);
+}
+
+async function submit() {
+  await normalize();
+  submitted.value = JSON.stringify(form.value, null, 2);
+  ElMessage.success('已生成提交数据，见下方 JSON');
 }
 </script>
 
 <template>
   <DemoPage width="wide">
     <template #description>
-      费用报销演示表头→明细副作用：币种
-      <code>force</code>（默认汇率时改币种会带出新汇率）、部门/项目 <code>inherit</code>、汇率
-      <code>recalculate</code>
-      本位币金额。明细改部门/项目后标记为人工值；手改汇率后改币种不覆盖。
+      费用报销：报销人带出部门（可手改），部门 / 项目下发到未手改的行；费用类型 ×
+      金额估算可抵扣税额（可手改，改金额或类型后重估）；本位币金额 = (原币 − 可抵扣) ×
+      汇率；表头四个合计与「应付金额 = 本位币合计 − 预借款」都是入库字段。
     </template>
 
     <DemoBlock>
       <template #hint>
-        改币种可能带出默认汇率；手改汇率后改币种不覆盖。改汇率会重算全部本位币金额；改明细部门/项目会标记为人工值。状态：{{
-          statusText
-        }}
+        示例单据第 2
+        行部门是「市场中心」——载入后它不是人工值（载入不产生人工标记），所以改表头部门会把它一起带过去；先手改再改表头则保留。
       </template>
 
-      <el-form class="erp-page__header" label-position="top" :model="draft.header">
-        <el-form-item label="报销人部门 · 继承传播">
-          <el-select
-            :model-value="draft.header.departmentId"
-            @change="onHeaderChange('departmentId', $event)"
-          >
+      <div class="mb-3 flex flex-wrap items-center gap-2">
+        <el-button @click="loadSeed">载入示例单据</el-button>
+        <el-button @click="newDocument">新建空单</el-button>
+        <el-button type="primary" :loading="pending" @click="submit">提交</el-button>
+        <span class="demo__meta">{{ form.documentNo ?? '未保存单据' }}</span>
+      </div>
+
+      <el-form class="erp-page__header" label-position="top" :model="form">
+        <el-form-item label="报销人 · 带出部门">
+          <el-select v-model="form.employeeId" placeholder="选择报销人">
             <el-option
-              v-for="option in EXPENSE_DEPARTMENT_OPTIONS"
+              v-for="option in EMPLOYEE_OPTIONS"
               :key="option.value"
               :label="option.label"
               :value="option.value"
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="默认项目 · 继承传播">
-          <el-select
-            :model-value="draft.header.projectId"
-            @change="onHeaderChange('projectId', $event)"
-          >
+        <el-form-item>
+          <template #label>
+            部门 · 明细继承
+            <el-tag
+              v-if="isManual('departmentId')"
+              class="ml-1"
+              size="small"
+              type="warning"
+              closable
+              @close="restore('departmentId')"
+            >
+              手改
+            </el-tag>
+          </template>
+          <el-select v-model="form.departmentId" placeholder="选择部门">
             <el-option
-              v-for="option in EXPENSE_PROJECT_OPTIONS"
+              v-for="option in DEPARTMENT_OPTIONS"
               :key="option.value"
               :label="option.label"
               :value="option.value"
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="报销币种 · 强制同步">
-          <el-select
-            :model-value="draft.header.currency"
-            @change="onHeaderChange('currency', $event)"
-          >
+        <el-form-item label="默认项目 · 明细继承">
+          <el-select v-model="form.projectId" placeholder="选择项目">
+            <el-option
+              v-for="option in PROJECT_OPTIONS"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="报销币种 · 明细强制同步">
+          <el-select v-model="form.currency">
             <el-option
               v-for="option in CURRENCY_OPTIONS"
               :key="option.value"
@@ -134,85 +149,68 @@ async function onRemoveLine(id: string) {
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="汇率 · 触发重算">
+        <el-form-item>
+          <template #label>
+            汇率 · 币种带出
+            <el-tag
+              v-if="isManual('exchangeRate')"
+              class="ml-1"
+              size="small"
+              type="warning"
+              closable
+              @close="restore('exchangeRate')"
+            >
+              手改
+            </el-tag>
+          </template>
           <el-input-number
+            v-model="form.exchangeRate"
             class="w-full!"
-            :model-value="Number(draft.header.exchangeRate)"
             :min="0.01"
             :step="0.1"
+            :precision="4"
+            controls-position="right"
+          />
+        </el-form-item>
+        <el-form-item label="预借款 · 冲抵应付">
+          <el-input-number
+            v-model="form.advanceAmount"
+            class="w-full!"
+            :min="0"
+            :step="100"
             :precision="2"
             controls-position="right"
-            @change="onHeaderChange('exchangeRate', $event)"
           />
         </el-form-item>
       </el-form>
 
-      <PlusTable
-        :data="draft.lines"
-        :columns="expenseReportColumns"
-        row-key="id"
-        mode="cell"
-        border
-        @cell-change="onCellChange"
-      >
+      <PlusTable :data="form.lines" :columns="expenseReportColumns" row-key="id" mode="cell" border>
         <template #toolbar>
-          <el-button type="primary" @click="onAddLine">新增明细</el-button>
+          <el-button type="primary" @click="addLine">新增明细</el-button>
         </template>
         <template #cell-source="{ row }">
-          {{ formatSource(row, ['departmentId', 'projectId']) }}
+          <ManualFieldTags
+            :row="row"
+            :fields="expenseReportManualFields"
+            :labels="EXPENSE_FIELD_LABELS"
+            :is-manual="isManual"
+            @restore="restore([row, $event])"
+          />
         </template>
         <template #cell-actions="{ row }">
-          <el-button
-            type="danger"
-            link
-            :disabled="draft.lines.length <= 1"
-            @click.stop="onRemoveLine(row.id)"
-          >
-            删除
-          </el-button>
+          <el-button type="danger" link @click.stop="removeLine(row)">删除</el-button>
         </template>
       </PlusTable>
 
-      <div
-        class="mt-3 flex flex-wrap items-end gap-x-6 gap-y-3 border-t border-[var(--el-border-color-lighter)] pt-3"
-      >
-        <div class="min-w-28">
-          <div class="text-xs text-[var(--el-text-color-secondary)]">原币合计</div>
-          <div
-            class="mt-0.5 font-mono text-lg font-semibold tabular-nums tracking-tight text-[var(--el-text-color-primary)]"
-          >
-            {{ draft.summary.originalAmount ?? 0 }}
-          </div>
-        </div>
-        <div class="min-w-28">
-          <div class="text-xs text-[var(--el-text-color-secondary)]">可抵扣税额</div>
-          <div
-            class="mt-0.5 font-mono text-lg font-semibold tabular-nums tracking-tight text-[var(--el-text-color-primary)]"
-          >
-            {{ draft.summary.deductibleTax ?? 0 }}
-          </div>
-        </div>
-        <div class="min-w-28">
-          <div class="text-xs text-[var(--el-text-color-secondary)]">本位币合计</div>
-          <div
-            class="mt-0.5 font-mono text-lg font-semibold tabular-nums tracking-tight text-[var(--el-color-primary)]"
-          >
-            {{ draft.summary.localAmount ?? 0 }}
-          </div>
-        </div>
-        <div class="ml-auto flex items-center self-center">
-          <span
-            class="rounded-full px-2.5 py-0.5 text-xs font-medium"
-            :class="
-              draft.dirty
-                ? 'bg-[var(--el-color-warning-light-9)] text-[var(--el-color-warning-dark-2)]'
-                : 'bg-[var(--el-color-success-light-9)] text-[var(--el-color-success-dark-2)]'
-            "
-          >
-            {{ draft.dirty ? '有未保存修改' : '干净草稿' }}
-          </span>
-        </div>
-      </div>
+      <DocumentSummaryBar :items="summary" :pending="pending" />
+
+      <DemoCode
+        v-if="submitted"
+        class="mt-4"
+        :code="submitted"
+        lang="json"
+        title="提交的 form（normalize 后）"
+      />
     </DemoBlock>
   </DemoPage>
 </template>

@@ -34,21 +34,22 @@ export const columnsSnippet: HomeSnippet = {
 
 export const linkageSnippet: HomeSnippet = {
   label: 'erp/sales-order-linkage.ts',
-  note: '一处声明',
+  note: '规则即表单',
   lang: 'ts',
-  code: `export const salesOrderRules: EmitEffectRules = {
-  sourceFields: ['unitPrice', 'warehouseId', 'taxRate'],
-  headerRules: {
-    customerId: repriceInheritedField('unitPrice', resolveSalesPrice),
-    currency: forceCurrencyWithRate(),
-    warehouseId: inheritField('warehouseId', 'warehouseId'),
-    taxRate: inheritField('taxRate', 'taxRate'),
+  code: `export const salesOrderRules = defineEmitRules<SalesOrderForm>({
+  exchangeRate: { default: ({ form }) => EXCHANGE_RATES[form.currency] },
+  totalAmount: ({ form }) => sum(form.lines, 'amount'),
+  lines: {
+    currency: ({ form }) => form.currency,
+    warehouseId: { default: ({ form }) => form.warehouseId },
+    unitPrice: { default: ({ row, form }) => fetchSalesPrice(row.productId, form.customerId), confirm: true },
+    amount: ({ row }) => money(row.quantity * row.unitPrice * (1 + row.taxRate)),
   },
-  recalculateLine: recalculateSalesLine,
-  summarize: (lines) => ({ totalAmount: sum(lines, 'amount') }),
-};
+});
 
-const { draft, changeHeader } = useEmitEffect(salesOrderRules, createSalesOrderDraft());`,
+const form = ref({ ...defaultSalesOrderForm });
+useEmitEffect(form, salesOrderRules, { confirm });
+// 之后：v-model="form.currency"、:data="form.lines"、form.value.lines.push(row)`,
 };
 
 export const persistSnippet: HomeSnippet = {

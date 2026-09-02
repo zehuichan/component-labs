@@ -1,270 +1,254 @@
 <script setup lang="ts">
 import DemoApiTable from '@/components/demo/demo-api-table.vue';
+import DemoCode from '@/components/demo/demo-code.vue';
 import DemoPage from '@/components/demo/demo-page.vue';
 
 defineOptions({ name: 'ErpApiOverview' });
+
+const usageSnippet = `// action.vue —— 和普通 CRUD 页一样声明表单，之后只多一行
+const form = ref<OrderForm>({ ...defaultForm, cargos: [], dims: [] });
+const { pending, isManual, restore, normalize } = useEmitEffect(form, orderRules, {
+  confirm: useConfirmDialog(FIELD_LABELS),
+});
+
+const getDetail = async () => {
+  const res = await getOrder(params.id);
+  form.value = res.data; // 整体替换 = 载入：不联动、不改已存值、清空人工标记
+};
+
+const submit = async () => {
+  await normalize(); // 汇总 / 派生字段与明细严格一致
+  await (params.id ? updateOrder : addOrder)(form.value);
+};
+
+onMounted(getDetail);`;
+
+const templateSnippet = `<el-form :model="form">
+  <el-select v-model="form.currency" />
+  <el-input-number v-model="form.exchangeRate" />
+  <PlusTable :data="form.cargos" :columns="cargoColumns" row-key="id" mode="cell" />
+  <PlusTable :data="form.dims" :columns="dimColumns" row-key="id" mode="cell" />
+  <el-button @click="form.cargos.push(createCargo())">加行</el-button>
+</el-form>`;
+
+const rulesSnippet = `export const orderRules = defineEmitRules<OrderForm>({
+  // 表头字段：{ default } 可被手改，依赖变了再重算
+  exchangeRate: { default: ({ form }) => RATES[form.currency] },
+  // 表头汇总：纯函数 = compute，永远跟随公式
+  totalWeight: ({ form }) => sum(form.cargos, 'feeWeight'),
+  // 数组字段 → 行规则表，字段名与行对象一致
+  cargos: {
+    feeWeight: {
+      default: ({ row }) => Math.max(row.grossWeight, row.volume * 167),
+      confirm: true, // 表头触发批量重算时先问一次
+    },
+    amount: ({ row, form }) => money(row.feeWeight * form.unitPrice),
+  },
+  dims: {
+    volume: ({ row }) => money((row.length * row.width * row.height) / 1e6),
+  },
+});`;
 </script>
 
 <template>
   <DemoPage width="wide">
     <template #description>
-      <code>useEmitEffect</code> 公开 API
-      参考。用于单据草稿：表头变更驱动明细副作用，再汇总。交互与场景见侧栏其它 demo。
+      <code>useEmitEffect(form, rules, options)</code>
+      把「字段怎么算」声明在一张与表单同构的规则表里，然后挂到已有的
+      <code>ref</code> / <code>reactive</code> 表单上。表单仍是唯一数据源：模板
+      <code>v-model</code> / <code>:data</code> 直绑，代码用赋值、<code>push</code>、<code
+        >splice</code
+      >
+      直接改，引擎按依赖自动重算并只写回变化的字段。
     </template>
 
     <template #api>
-      <DemoApiTable title="Options">
+      <DemoApiTable title="接法">
         <tr>
-          <td><code>rules</code></td>
-          <td><code>EmitEffectRules&lt;H, L&gt;</code></td>
-          <td>必填。表头副作用、建行、行重算与汇总规则。</td>
+          <td colspan="3">
+            <DemoCode :code="usageSnippet" lang="ts" title="script" />
+            <DemoCode class="mt-3" :code="templateSnippet" lang="vue" title="template" />
+          </td>
+        </tr>
+      </DemoApiTable>
+
+      <DemoApiTable title="Rules" :headers="['写法', '语义', '说明']">
+        <tr>
+          <td><code>field: (ctx) =&gt; value</code></td>
+          <td><code>compute</code></td>
+          <td>永远跟随公式；用户在该字段上的输入会被重算覆盖（开发期告警）。</td>
         </tr>
         <tr>
-          <td><code>initialDraft</code></td>
-          <td><code>DocumentDraft&lt;H, L&gt;</code></td>
+          <td><code>field: { default: (ctx) =&gt; value }</code></td>
+          <td><code>default</code></td>
           <td>
-            必填。初始草稿；内部会 <code>cloneDeep</code>，作为 <code>reset()</code> 默认基线。
+            建议值。首次遇到且字段为空时填入；已有值只学习依赖不覆盖。用户改过即「人工值」：
+            跨层依赖（表头 ⇄ 明细）变化时保留，同层依赖（同行 /
+            同表头）由用户改动引发变化时失效重算。
           </td>
+        </tr>
+        <tr>
+          <td><code>{ ..., confirm: true }</code></td>
+          <td>确认</td>
+          <td>
+            表头单字段变更导致该规则批量改值时，先调
+            <code>options.confirm</code>；拒绝则表头字段回滚。
+          </td>
+        </tr>
+        <tr>
+          <td><code>arrayField: { rowField: rule }</code></td>
+          <td>行规则表</td>
+          <td>
+            对象数组字段自动识别为子表；行规则的 <code>ctx</code> 是
+            <code>{ row, rows, form }</code>，表头规则是 <code>{ form }</code>。
+          </td>
+        </tr>
+        <tr>
+          <td><code>return undefined</code></td>
+          <td>保持</td>
+          <td>
+            返回 <code>undefined</code> 表示不改当前值（主数据未选全时常用）；返回
+            <code>null</code> 会清空。
+          </td>
+        </tr>
+        <tr>
+          <td><code>async (ctx) =&gt; ...</code></td>
+          <td>异步</td>
+          <td>
+            支持返回 Promise；同一轮的异步规则并行，<code>await</code> 之后的读取同样计入依赖。
+          </td>
+        </tr>
+      </DemoApiTable>
+
+      <DemoApiTable title="Options">
+        <tr>
+          <td><code>form</code></td>
+          <td><code>Ref&lt;F&gt; | Reactive&lt;F&gt;</code></td>
+          <td>必填（位置参数）。与后端 DTO 同构的表单；子表必须是表单上的数组字段。</td>
+        </tr>
+        <tr>
+          <td><code>rules</code></td>
+          <td><code>EmitEffectRules&lt;F&gt;</code></td>
+          <td>必填（位置参数）。用 <code>defineEmitRules&lt;F&gt;()</code> 获得字段级类型推导。</td>
         </tr>
         <tr>
           <td><code>confirm</code></td>
+          <td><code>(c: EmitEffectConfirmation) =&gt; boolean | Promise&lt;boolean&gt;</code></td>
+          <td>可选。未提供时视为同意。</td>
+        </tr>
+        <tr>
+          <td><code>equals</code></td>
+          <td><code>(a, b) =&gt; boolean</code></td>
           <td>
-            <code>(confirmation) =&gt; boolean | Promise&lt;boolean&gt;</code>
+            可选。判定「值是否变了」；默认数字与数字字符串相等（<code>1023 == "1023"</code
+            >），对象深比较。
           </td>
-          <td>
-            可选。mutation 带确认时调用；返回
-            <code>false</code> 则不提交。未提供时默认通过。
-          </td>
+        </tr>
+        <tr>
+          <td><code>immediate</code></td>
+          <td><code>boolean</code></td>
+          <td>可选。挂载后立即 <code>normalize()</code>，适合新建单据 / 演示。</td>
+        </tr>
+        <tr>
+          <td><code>onError</code></td>
+          <td><code>(error) =&gt; void</code></td>
+          <td>可选。表单改动触发的传播失败时回调；默认 <code>console.error</code>。</td>
         </tr>
       </DemoApiTable>
 
       <DemoApiTable title="Return">
         <tr>
-          <td><code>draft</code></td>
-          <td><code>Ref&lt;DocumentDraft&lt;H, L&gt;&gt;</code></td>
-          <td>当前草稿（header / lines / summary / dirty）。</td>
+          <td><code>pending</code></td>
+          <td><code>Readonly&lt;Ref&lt;boolean&gt;&gt;</code></td>
+          <td>是否有传播在排队 / 执行（异步取价时可做 loading）。</td>
         </tr>
         <tr>
-          <td><code>changeHeader</code></td>
-          <td><code>(field, value) =&gt; Promise&lt;boolean&gt;</code></td>
+          <td><code>isManual</code></td>
+          <td><code>(field | [row, field]) =&gt; boolean</code></td>
+          <td>该字段是否为人工值；模板中调用会随标记变化重新渲染。</td>
+        </tr>
+        <tr>
+          <td><code>restore</code></td>
+          <td><code>(field | [row, field]) =&gt; Promise&lt;void&gt;</code></td>
+          <td>清除人工标记并按规则重算该字段（含其下游）。</td>
+        </tr>
+        <tr>
+          <td><code>normalize</code></td>
+          <td><code>() =&gt; Promise&lt;void&gt;</code></td>
           <td>
-            改表头并跑
-            <code>headerRules[field]</code>；确认取消时返回 <code>false</code>，草稿不变。
+            重算所有 <code>compute</code> 字段、补齐为空的 <code>default</code>；已存 default
+            值不覆盖。提交前调用。
           </td>
         </tr>
         <tr>
-          <td><code>changeCell</code></td>
+          <td><code>hydrate</code></td>
           <td>
-            <code>(command: DetailChangeCommand) =&gt; Promise&lt;boolean&gt;</code>
+            <code>(load: () =&gt; void | Promise&lt;void&gt;) =&gt; Promise&lt;void&gt;</code>
           </td>
           <td>
-            改明细格；若
-            <code>prop</code> 在 <code>sourceFields</code> 内，标记为
-            <code>manual</code> 后重算该行。
-          </td>
-        </tr>
-        <tr>
-          <td><code>addLine</code></td>
-          <td><code>(id: string) =&gt; void</code></td>
-          <td>用 <code>rules.createLine</code> 追加行并重算汇总。</td>
-        </tr>
-        <tr>
-          <td><code>removeLine</code></td>
-          <td><code>(id: string) =&gt; void</code></td>
-          <td>按行 <code>id</code> 删除并重算汇总。</td>
-        </tr>
-        <tr>
-          <td><code>reset</code></td>
-          <td><code>(next?: DocumentDraft) =&gt; void</code></td>
-          <td>
-            重置为
-            <code>next</code> 或初始 <code>initialDraft</code>（深拷贝）。
+            包裹 <code>Object.assign(form.value, data)</code> 式的局部载入；整体替换
+            <code>form.value</code> 无需包裹，自动识别为载入。
           </td>
         </tr>
       </DemoApiTable>
 
-      <DemoApiTable title="EmitEffectRules">
+      <DemoApiTable title="何时会重算" :headers="['动作', '引擎行为']">
         <tr>
-          <td><code>sourceFields</code></td>
-          <td><code>string[]</code></td>
+          <td>改表头 / 行字段（赋值、<code>PlusTable</code> 编辑）</td>
           <td>
-            追踪继承 / 人工来源的明细字段；单元格改这些字段时写入
-            <code>fieldSources[prop] = 'manual'</code>。
+            只重算读过该字段的规则，链式传播到收敛；被改的 <code>default</code>
+            字段标为人工值，本轮不反算。
           </td>
         </tr>
         <tr>
-          <td><code>headerRules</code></td>
-          <td><code>Record&lt;string, HeaderEmitRule&gt;</code></td>
+          <td><code>push</code> 新行</td>
           <td>
-            表头字段 → 副作用规则；
-            <code>changeHeader</code> 未配置字段会抛错。
+            新行 <code>compute</code> 全算，<code>default</code> 只填空值；读过该数组的汇总重算。
           </td>
         </tr>
         <tr>
-          <td><code>createLine</code></td>
-          <td><code>(draft, id) =&gt; L</code></td>
-          <td>新建明细行（含默认字段与 <code>fieldSources</code>）。</td>
+          <td><code>splice</code> 删行</td>
+          <td>丢弃该行依赖，读过该数组的汇总重算。</td>
         </tr>
         <tr>
-          <td><code>recalculateLine</code></td>
-          <td><code>(line, header) =&gt; L</code></td>
-          <td>单行派生重算（金额、本币等）；表头 / 明细变更与增删行后都会走到。</td>
+          <td><code>form.value = data</code> / <code>hydrate(fn)</code></td>
+          <td>只学习依赖、不写任何值、清空人工标记。</td>
         </tr>
         <tr>
-          <td><code>summarize</code></td>
-          <td><code>(lines, header) =&gt; DocumentSummary</code></td>
-          <td>根据当前行与表头生成汇总。</td>
-        </tr>
-      </DemoApiTable>
-
-      <DemoApiTable title="HeaderEmitRule">
-        <tr>
-          <td><code>policy</code></td>
-          <td><code>EmitEffectPolicy</code></td>
-          <td><code>'force' | 'inherit' | 'recalculate'</code>，见下表。</td>
+          <td><code>normalize()</code></td>
+          <td>等价于「首次遇到」：<code>compute</code> 全算，<code>default</code> 补空。</td>
         </tr>
         <tr>
-          <td><code>requiresConfirmation</code></td>
-          <td><code>boolean</code></td>
-          <td>
-            可选。为 true 且有受影响行时生成
-            <code>EmitEffectConfirmation</code>，走 <code>confirm</code>。
-          </td>
-        </tr>
-        <tr>
-          <td><code>apply</code></td>
-          <td>
-            <code>(line, nextHeader, previousHeader) =&gt; HeaderLineEffect</code>
-          </td>
-          <td>对每一明细行产出 patch / sourcePatch / preservedFields。</td>
-        </tr>
-      </DemoApiTable>
-
-      <DemoApiTable title="HeaderLineEffect" :headers="['名称', '类型', '说明']">
-        <tr>
-          <td><code>patch</code></td>
-          <td><code>Record&lt;string, unknown&gt;</code></td>
-          <td>可选。合并到该行字段。</td>
-        </tr>
-        <tr>
-          <td><code>sourcePatch</code></td>
-          <td><code>Record&lt;string, FieldSource&gt;</code></td>
-          <td>可选。合并到 <code>line.fieldSources</code>。</td>
-        </tr>
-        <tr>
-          <td><code>preservedFields</code></td>
-          <td><code>string[]</code></td>
-          <td>
-            可选。本行保留的人工值字段；计入确认文案的
-            <code>preservedCount</code>。
-          </td>
-        </tr>
-      </DemoApiTable>
-
-      <DemoApiTable title="Policy" :headers="['值', '说明']">
-        <tr>
-          <td><code>force</code></td>
-          <td>强制覆盖明细对应字段（如币种），不因 manual 跳过。</td>
-        </tr>
-        <tr>
-          <td><code>inherit</code></td>
-          <td>
-            仅同步
-            <code>inherited</code> 行； <code>manual</code> 行保留并记入
-            <code>preservedFields</code>。
-          </td>
-        </tr>
-        <tr>
-          <td><code>recalculate</code></td>
-          <td>
-            按业务重算派生值（如单价）；常配合
-            <code>requiresConfirmation</code>。
-          </td>
-        </tr>
-      </DemoApiTable>
-
-      <DemoApiTable title="Types · DocumentDraft">
-        <tr>
-          <td><code>header</code></td>
-          <td><code>H</code></td>
-          <td>表头字段对象。</td>
-        </tr>
-        <tr>
-          <td><code>lines</code></td>
-          <td><code>L[]</code></td>
-          <td>明细行列表。</td>
-        </tr>
-        <tr>
-          <td><code>summary</code></td>
-          <td><code>DocumentSummary</code></td>
-          <td><code>Record&lt;string, number&gt;</code> 汇总。</td>
-        </tr>
-        <tr>
-          <td><code>dirty</code></td>
-          <td><code>boolean</code></td>
-          <td>是否有未保存变更；mutation 提交后为 <code>true</code>。</td>
-        </tr>
-      </DemoApiTable>
-
-      <DemoApiTable title="Types · DocumentLine">
-        <tr>
-          <td><code>id</code></td>
-          <td><code>string</code></td>
-          <td>行唯一标识。</td>
-        </tr>
-        <tr>
-          <td><code>fieldSources</code></td>
-          <td><code>Record&lt;string, FieldSource&gt;</code></td>
-          <td>
-            字段来源：
-            <code>'inherited' | 'manual'</code>。
-          </td>
-        </tr>
-        <tr>
-          <td><code>[field]</code></td>
-          <td><code>unknown</code></td>
-          <td>业务字段（数量、单价、仓库等）。</td>
-        </tr>
-      </DemoApiTable>
-
-      <DemoApiTable title="Types · DetailChangeCommand">
-        <tr>
-          <td><code>rowId</code></td>
-          <td><code>string</code></td>
-          <td>目标行 <code>id</code>。</td>
-        </tr>
-        <tr>
-          <td><code>prop</code></td>
-          <td><code>string</code></td>
-          <td>变更字段名。</td>
-        </tr>
-        <tr>
-          <td><code>value</code> / <code>oldValue</code></td>
-          <td><code>unknown</code></td>
-          <td>新值与旧值（供调用方对照）。</td>
+          <td><code>restore(target)</code></td>
+          <td>无视人工标记重算该字段。</td>
         </tr>
       </DemoApiTable>
 
       <DemoApiTable title="Types · EmitEffectConfirmation">
         <tr>
-          <td><code>affectedCount</code></td>
-          <td><code>number</code></td>
-          <td>实际发生变化的行数。</td>
+          <td><code>field</code> / <code>oldValue</code> / <code>newValue</code></td>
+          <td>—</td>
+          <td>触发本次批量重算的表头字段及前后值；拒绝时回滚到 <code>oldValue</code>。</td>
+        </tr>
+        <tr>
+          <td><code>affected</code></td>
+          <td><code>FieldRef[]</code></td>
+          <td>
+            带 <code>confirm</code> 且实际会改值的字段（<code>{ entity?, rowId?, field }</code>）。
+          </td>
         </tr>
         <tr>
           <td><code>preservedCount</code></td>
           <td><code>number</code></td>
-          <td>保留人工值的行数。</td>
+          <td>带 <code>confirm</code> 但因人工值被保留的字段数。</td>
         </tr>
+      </DemoApiTable>
+
+      <DemoApiTable title="规则表示例">
         <tr>
-          <td><code>fields</code></td>
-          <td><code>string[]</code></td>
-          <td>受影响的明细字段名列表。</td>
-        </tr>
-        <tr>
-          <td><code>message</code></td>
-          <td><code>string</code></td>
-          <td>默认确认文案，可直接用于对话框。</td>
+          <td colspan="3">
+            <DemoCode :code="rulesSnippet" lang="ts" title="order-linkage.ts" />
+          </td>
         </tr>
       </DemoApiTable>
     </template>

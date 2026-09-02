@@ -1,166 +1,151 @@
 import type { PlusTableColumnDef } from '@/components/plus-table';
-import type { DocumentDraft, DocumentLine, EmitEffectRules } from '@/composables';
+import { defineEmitRules } from '@/composables';
+import { money, optionLabel, sum } from './emit-helpers';
 import {
   CURRENCY_OPTIONS,
+  EXCHANGE_RATES,
+  PRODUCT_OPTIONS,
   WAREHOUSE_OPTIONS,
-  forceCurrencyWithRate,
-  inheritField,
-  money,
-  optionLabel,
-  repriceInheritedField,
-  sum,
-  type SelectOption,
-} from './emit-helpers';
+  customerOf,
+  fetchSalesPrice,
+} from './mock-master-data';
 
-export const SALES_CUSTOMER_OPTIONS: SelectOption[] = [
-  { label: '华东旗舰客户', value: 'customer-east' },
-  { label: '全国渠道客户', value: 'customer-channel' },
-];
+export interface SalesOrderLine {
+  id: number;
+  productId: string | null;
+  quantity: number | null;
+  currency: string | null;
+  warehouseId: string | null;
+  unitPrice: number | null;
+  taxRate: number | null;
+  amount: number | null;
+  localAmount: number | null;
+}
 
-export const SALES_PRODUCT_OPTIONS: SelectOption[] = [
-  { label: '商务笔记本', value: 'notebook' },
-  { label: '专业显示器', value: 'monitor' },
-  { label: '实施服务', value: 'service' },
-];
+export interface SalesOrderForm {
+  id: number | null;
+  documentNo: string | null;
+  customerId: string | null;
+  currency: string | null;
+  exchangeRate: number | null;
+  warehouseId: string | null;
+  taxRate: number | null;
+  /** Aggregates are stored on the header so the backend can validate them. */
+  totalQty: number | null;
+  totalAmount: number | null;
+  totalLocalAmount: number | null;
+  lines: SalesOrderLine[];
+}
 
-const BASE_PRICES: Record<string, number> = {
-  notebook: 6800,
-  monitor: 1800,
-  service: 1200,
+export const defaultSalesOrderForm: SalesOrderForm = {
+  id: null,
+  documentNo: null,
+  customerId: null,
+  currency: 'CNY',
+  exchangeRate: null,
+  warehouseId: null,
+  taxRate: 0.13,
+  totalQty: null,
+  totalAmount: null,
+  totalLocalAmount: null,
+  lines: [],
 };
 
-function resolveSalesPrice(line: DocumentLine, header: Record<string, unknown>): number {
-  const base = BASE_PRICES[String(line.productId)] ?? 0;
-  const customerFactor = header.customerId === 'customer-channel' ? 0.95 : 1;
-  return money(base * customerFactor);
-}
-
-function recalculateSalesLine(line: DocumentLine, header: Record<string, unknown>): DocumentLine {
-  const next: DocumentLine = {
-    ...line,
-    fieldSources: { ...line.fieldSources },
+export function createSalesLine(id: number): SalesOrderLine {
+  return {
+    id,
+    productId: null,
+    quantity: 1,
+    currency: null,
+    warehouseId: null,
+    unitPrice: null,
+    taxRate: null,
+    amount: null,
+    localAmount: null,
   };
-  next.currency = header.currency;
-  if (next.fieldSources.warehouseId !== 'manual') {
-    next.warehouseId = header.warehouseId;
-  }
-  if (next.fieldSources.taxRate !== 'manual') {
-    next.taxRate = header.taxRate;
-  }
-  if (next.fieldSources.unitPrice !== 'manual') {
-    next.unitPrice = resolveSalesPrice(next, header);
-  } else {
-    next.unitPrice = money(next.unitPrice);
-  }
-
-  const quantity = Number(next.quantity ?? 0);
-  const unitPrice = Number(next.unitPrice ?? 0);
-  const taxRate = Number(next.taxRate ?? 0);
-  next.amount = money(quantity * unitPrice * (1 + taxRate));
-  next.localAmount = money(Number(next.amount) * Number(header.exchangeRate ?? 0));
-  return next;
 }
 
-function createSalesLine(draft: DocumentDraft, id: string): DocumentLine {
-  return recalculateSalesLine(
-    {
-      id,
-      fieldSources: {
-        unitPrice: 'inherited',
-        warehouseId: 'inherited',
-        taxRate: 'inherited',
-      },
-      productId: 'service',
-      quantity: 1,
-      currency: draft.header.currency,
-      warehouseId: draft.header.warehouseId,
-      unitPrice: 0,
-      taxRate: draft.header.taxRate,
-      amount: 0,
-    },
-    draft.header,
-  );
-}
-
-export function createSalesOrderDraft(): DocumentDraft {
-  const header = {
+/** A stored document: every derived value is already present, so loading it rewrites nothing. */
+export function createSalesOrderSeed(): SalesOrderForm {
+  return {
+    id: 1001,
     documentNo: 'SO-20260717-001',
     customerId: 'customer-east',
     currency: 'CNY',
     exchangeRate: 1,
     warehouseId: 'WH-SH',
     taxRate: 0.13,
-  };
-  const draft: DocumentDraft = {
-    dirty: false,
-    header,
-    lines: [],
-    summary: {},
-  };
-
-  const notebook = recalculateSalesLine(
-    {
-      ...createSalesLine(draft, '1'),
-      productId: 'notebook',
-      quantity: 2,
-    },
-    header,
-  );
-  const monitor = recalculateSalesLine(
-    {
-      ...createSalesLine(draft, '2'),
-      productId: 'monitor',
-      quantity: 4,
-      warehouseId: 'WH-BJ',
-      fieldSources: {
-        unitPrice: 'inherited',
-        warehouseId: 'manual',
-        taxRate: 'inherited',
+    totalQty: 6,
+    totalAmount: 23504,
+    totalLocalAmount: 23504,
+    lines: [
+      {
+        id: 1,
+        productId: 'notebook',
+        quantity: 2,
+        currency: 'CNY',
+        warehouseId: 'WH-SH',
+        unitPrice: 6800,
+        taxRate: 0.13,
+        amount: 15368,
+        localAmount: 15368,
       },
-    },
-    header,
-  );
-
-  draft.lines = [notebook, monitor];
-  draft.summary = {
-    totalQty: sum(draft.lines, 'quantity'),
-    totalAmount: sum(draft.lines, 'amount'),
-    totalLocalAmount: sum(draft.lines, 'localAmount'),
+      {
+        id: 2,
+        productId: 'monitor',
+        quantity: 4,
+        currency: 'CNY',
+        warehouseId: 'WH-BJ',
+        unitPrice: 1800,
+        taxRate: 0.13,
+        amount: 8136,
+        localAmount: 8136,
+      },
+    ],
   };
-  return draft;
 }
 
-export const salesOrderRules: EmitEffectRules = {
-  sourceFields: ['unitPrice', 'warehouseId', 'taxRate'],
-  headerRules: {
-    customerId: repriceInheritedField('unitPrice', resolveSalesPrice),
-    currency: forceCurrencyWithRate(),
-    exchangeRate: {
-      policy: 'recalculate',
-      requiresConfirmation: true,
-      apply: () => ({}),
+export const salesOrderRules = defineEmitRules<SalesOrderForm>({
+  exchangeRate: { default: ({ form }) => EXCHANGE_RATES[form.currency ?? ''] },
+  warehouseId: { default: ({ form }) => customerOf(form.customerId)?.defaultWarehouseId },
+  totalQty: ({ form }) => sum(form.lines, 'quantity'),
+  totalAmount: ({ form }) => sum(form.lines, 'amount'),
+  totalLocalAmount: ({ form }) => sum(form.lines, 'localAmount'),
+  lines: {
+    currency: ({ form }) => form.currency,
+    warehouseId: { default: ({ form }) => form.warehouseId },
+    taxRate: { default: ({ form }) => form.taxRate },
+    unitPrice: {
+      default: ({ row, form }) => fetchSalesPrice(row.productId, form.customerId),
+      confirm: true,
     },
-    warehouseId: inheritField('warehouseId', 'warehouseId'),
-    taxRate: inheritField('taxRate', 'taxRate'),
+    amount: ({ row }) =>
+      money((row.quantity ?? 0) * (row.unitPrice ?? 0) * (1 + (row.taxRate ?? 0))),
+    localAmount: ({ row, form }) => money((row.amount ?? 0) * (form.exchangeRate ?? 0)),
   },
-  createLine: createSalesLine,
-  recalculateLine: recalculateSalesLine,
-  summarize: (lines) => ({
-    totalQty: sum(lines, 'quantity'),
-    totalAmount: sum(lines, 'amount'),
-    totalLocalAmount: sum(lines, 'localAmount'),
-  }),
+});
+
+export const SALES_FIELD_LABELS: Record<string, string> = {
+  customerId: '客户',
+  currency: '币种',
+  exchangeRate: '汇率',
+  warehouseId: '仓库',
+  taxRate: '税率',
+  unitPrice: '单价',
 };
+
+export const salesOrderManualFields = ['warehouseId', 'taxRate', 'unitPrice'] as const;
 
 export const salesOrderColumns: PlusTableColumnDef[] = [
   { type: 'index', label: '#', width: 54 },
   {
     prop: 'productId',
     label: '商品',
+    minWidth: 140,
     editable: true,
     component: 'select',
-    componentProps: { options: SALES_PRODUCT_OPTIONS },
-    formatter: (row: DocumentLine) => optionLabel(SALES_PRODUCT_OPTIONS, row.productId),
+    componentProps: { options: PRODUCT_OPTIONS },
+    formatter: (row: SalesOrderLine) => optionLabel(PRODUCT_OPTIONS, row.productId),
   },
   {
     prop: 'quantity',
@@ -174,8 +159,7 @@ export const salesOrderColumns: PlusTableColumnDef[] = [
     prop: 'currency',
     label: '币种',
     width: 110,
-    editable: false,
-    formatter: (row: DocumentLine) => optionLabel(CURRENCY_OPTIONS, row.currency),
+    formatter: (row: SalesOrderLine) => optionLabel(CURRENCY_OPTIONS, row.currency),
   },
   {
     prop: 'warehouseId',
@@ -184,7 +168,7 @@ export const salesOrderColumns: PlusTableColumnDef[] = [
     editable: true,
     component: 'select',
     componentProps: { options: WAREHOUSE_OPTIONS },
-    formatter: (row: DocumentLine) => optionLabel(WAREHOUSE_OPTIONS, row.warehouseId),
+    formatter: (row: SalesOrderLine) => optionLabel(WAREHOUSE_OPTIONS, row.warehouseId),
   },
   {
     prop: 'unitPrice',
@@ -202,28 +186,8 @@ export const salesOrderColumns: PlusTableColumnDef[] = [
     component: 'input-number',
     componentProps: { min: 0, max: 1, step: 0.01, precision: 2 },
   },
-  {
-    prop: 'amount',
-    label: '含税金额',
-    width: 120,
-    editable: false,
-  },
-  {
-    prop: 'localAmount',
-    label: '本位币金额',
-    width: 120,
-    editable: false,
-  },
-  {
-    prop: 'source',
-    label: '字段来源',
-    editable: false,
-  },
-  {
-    prop: 'actions',
-    type: 'operation',
-    label: '操作',
-    width: 76,
-    fixed: 'right',
-  },
+  { prop: 'amount', label: '含税金额', width: 120 },
+  { prop: 'localAmount', label: '本位币金额', width: 120 },
+  { prop: 'source', label: '人工值', minWidth: 160 },
+  { prop: 'actions', type: 'operation', label: '操作', width: 76, fixed: 'right' },
 ];
