@@ -5,11 +5,11 @@ vi.mock('../../table-column-settings/index.vue', () => ({
   default: { name: 'PlusTableColumnSettings', render: () => null },
 }));
 
-vi.mock('../../table-context-menu/index.vue', () => ({
+vi.mock('../../components/context-menu.vue', () => ({
   default: { name: 'PlusTableContextMenu', render: () => null },
 }));
 
-vi.mock('../../table-column', () => ({
+vi.mock('../../components/column', () => ({
   default: { name: 'PlusTableColumnNode', render: () => null },
 }));
 

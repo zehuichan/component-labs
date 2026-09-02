@@ -2,57 +2,47 @@ import PlusTable from './table.vue';
 
 export { PlusTable };
 
-export { PLUS_TABLE_INJECTION_KEY } from './tokens';
-export { EDITOR_REGISTRY, resolveEditor } from './adapter';
-export { defineColumns } from './table-column/defaults';
+export { PLUS_TABLE_INJECTION_KEY, usePlusTable } from './tokens';
+export { resolveEditor } from './adapter';
+export { defineColumns } from './column';
 
-export type {
-  EditorSlotProps,
-  HeaderSlotProps,
-  EditorBinding,
-  CellView,
-} from './table-cell/render-helper';
-export type {
-  BuiltinEditorType,
-  ColumnComponent,
-  EditorAdapter,
-  EditorColumnFields,
-  ResolvedEditor,
-} from './adapter';
+export type { ColumnComponent, EditorColumnFields, EditorTrigger, ResolvedEditor } from './adapter';
 export type { ComponentType } from '@/adapter';
-export type { Store } from './store';
-export type { SettingItem } from './store/columns';
-export type { CellPosition } from './store/current';
-export type { DependencyState } from './store/dependencies';
-export type { DirtyApi, DirtyCell } from './store/dirty';
-export type { HistoryApi } from './store/history';
+export type { CellView, EditorBinding, EditorSlotProps, HeaderSlotProps } from './cell';
+export type { PlusTableContext } from './tokens';
+export type { UseTableReturn } from './use-table';
+export type { SettingItem } from './composables/use-columns';
+export type { DependencyState } from './composables/use-dependencies';
+export type { DirtyCell } from './composables/use-dirty';
 export type {
   AdaptiveConfig,
   CellChangePayload,
-  CellError,
-  CellRule,
   ContextMenuContext,
   ContextMenuItem,
   ContextMenuItemSlotProps,
-  EditMode,
   HotkeyBinding,
   HotkeyContext,
   PageChangePayload,
   PlusTableEmits,
   PlusTableProps,
-  RowContext,
-  RowData,
-  RowKey,
+  PlusTableResolvedProps,
   ValidateResult,
-} from './table/defaults';
+} from './table';
 export type {
   CellContext,
+  CellError,
+  CellPosition,
+  CellRule,
   ColumnDependencies,
   ColumnNode,
   DependencyApi,
+  EditMode,
   PlusTableColumn,
   PlusTableColumnDef,
   PlusTableDataColumn,
   PlusTableSpecialColumn,
+  RowContext,
+  RowData,
+  RowKey,
   SpecialColumnType,
-} from './table-column/defaults';
+} from './types';

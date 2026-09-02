@@ -1,28 +1,24 @@
 import { inject } from 'vue';
 import type { InjectionKey } from 'vue';
-import type { TableHost } from './store/context';
-import type { InternalStore, Store } from './store';
-import type { RowData } from './table/defaults';
-
-/** 公开注入上下文仅暴露兼容的 index-based Store。 */
-interface PlusTableContext<T extends RowData = RowData> extends TableHost<T> {
-  store: Store<T>;
-}
+import type { PlusTableResolvedProps, TableHost } from './table';
+import type { RowData } from './types';
+import type { UseTableReturn } from './use-table';
 
 /**
- * 组件内部上下文可访问稳定 CellRef 相关成员。
- * host 先建、createStore 完成后一次性合入 store，装配期不存在回填空档。
+ * 注入给子组件（列 / 单元格 / 列设置 / 右键菜单）的表格上下文：
+ * props + 宿主能力 + useTable 的全部返回，扁平铺在一层上。
  */
-export interface PlusTable<T extends RowData = RowData> extends TableHost<T> {
-  store: InternalStore<T>;
-}
+export type PlusTableContext<T extends RowData = RowData> = TableHost<T> &
+  UseTableReturn<T> & {
+    props: PlusTableResolvedProps<T>;
+  };
 
 export const PLUS_TABLE_INJECTION_KEY: InjectionKey<PlusTableContext<any>> = Symbol('plus-table');
 
-export function usePlusTable<T extends RowData = RowData>(): PlusTable<T> {
+export function usePlusTable<T extends RowData = RowData>(): PlusTableContext<T> {
   const table = inject(PLUS_TABLE_INJECTION_KEY);
   if (!table) {
     throw new Error('[PlusTable] 当前组件必须在 PlusTable 内部使用');
   }
-  return table as unknown as PlusTable<T>;
+  return table;
 }

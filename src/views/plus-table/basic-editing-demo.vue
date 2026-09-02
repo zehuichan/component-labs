@@ -215,7 +215,7 @@ function handleCellDblclick(row: Row) {
         <tr>
           <td><code>component</code></td>
           <td>
-            <code>BuiltinEditorType | Component</code>
+            <code>ComponentType | Component</code>
           </td>
           <td>
             编辑控件。内置：<code>input</code> / <code>textarea</code> / <code>input-number</code> /

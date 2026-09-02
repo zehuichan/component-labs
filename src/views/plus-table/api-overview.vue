@@ -342,7 +342,7 @@ defineOptions({ name: 'ApiOverview' });
         </tr>
         <tr>
           <td><code>component</code></td>
-          <td><code>BuiltinEditorType | Component</code></td>
+          <td><code>ComponentType | Component</code></td>
           <td>
             编辑控件。内置：<code>input</code> / <code>textarea</code> / <code>input-number</code> /
             <code>select</code> / <code>date-picker</code> / <code>time-picker</code> /

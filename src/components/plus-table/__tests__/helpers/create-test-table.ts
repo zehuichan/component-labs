@@ -1,12 +1,16 @@
 import { effectScope, reactive, shallowRef, type EffectScope, type Slots } from 'vue';
 import { vi } from 'vitest';
 import { initComponentAdapter } from '@/adapter';
-import { createStore } from '../../store/helper';
-import { DEFAULT_PROPS } from '../../table/defaults';
-import type { InternalStore } from '../../store';
-import type { TableHost } from '../../store/context';
-import type { PlusTable } from '../../tokens';
-import type { PlusTableEmits, PlusTableProps, RowData } from '../../table/defaults';
+import { DEFAULT_PROPS } from '../../table';
+import { useTable } from '../../use-table';
+import type {
+  PlusTableEmits,
+  PlusTableProps,
+  PlusTableResolvedProps,
+  TableHost,
+} from '../../table';
+import type { PlusTableContext } from '../../tokens';
+import type { RowData } from '../../types';
 
 initComponentAdapter();
 
@@ -18,11 +22,19 @@ export type TestColumnDef = Record<string, any>;
 
 export interface TestTable<T extends RowData> {
   scope: EffectScope;
-  table: PlusTable<T>;
-  props: Omit<PlusTableProps<T>, 'columns'> & { columns: TestColumnDef[] };
-  store: InternalStore<T>;
+  /** 与根组件 provide 的上下文同构：props + host + useTable 全部返回 */
+  table: PlusTableContext<T>;
+  props: Omit<PlusTableResolvedProps<T>, 'columns'> & { columns: TestColumnDef[] };
   emit: ReturnType<typeof vi.fn>;
   dispose: () => void;
+}
+
+/** 与 table.vue 的 withDefaults 等价：pageSizes 这类数组默认值在 DEFAULT_PROPS 里是工厂函数 */
+function resolveDefaults() {
+  return {
+    ...DEFAULT_PROPS,
+    pageSizes: DEFAULT_PROPS.pageSizes(),
+  };
 }
 
 export function createTestTable<T extends RowData>(
@@ -32,15 +44,14 @@ export function createTestTable<T extends RowData>(
   } & Partial<Omit<PlusTableProps<T>, 'data' | 'columns'>>,
 ): TestTable<T> {
   const props = reactive({
+    ...resolveDefaults(),
     rowKey: 'id',
-    mode: DEFAULT_PROPS.mode,
     // 默认不跟随写值触发校验：用例自己调校验入口，避免每次写值都挂一串异步校验
     validateEvent: false,
     ...options,
-  }) as PlusTableProps<T>;
+  }) as PlusTableResolvedProps<T>;
   const emit = vi.fn();
-  const host = {
-    props,
+  const host: TableHost<T> = {
     emit: ((event: string, ...args: unknown[]) => {
       emit(event, ...args);
       if (event === 'update:data') props.data = args[0] as T[];
@@ -55,18 +66,19 @@ export function createTestTable<T extends RowData>(
       cell: (rowKey: string, colId: string) => `cell-${rowKey}-${colId}`,
       error: (rowKey: string, colId: string) => `error-${rowKey}-${colId}`,
     },
-  } satisfies TableHost<T>;
+    // 测试 host 总是把 update:data 写回 props.data，等价于挂了监听
+    hasDataListener: () => true,
+  };
   const scope = effectScope();
-  let store!: InternalStore<T>;
+  let table!: PlusTableContext<T>;
   scope.run(() => {
-    store = createStore<T>(host);
+    table = { props, ...host, ...useTable<T>(props, host) };
   });
 
   return {
     scope,
-    table: { ...host, store },
-    props,
-    store,
+    table,
+    props: props as TestTable<T>['props'],
     emit,
     dispose: () => scope.stop(),
   };

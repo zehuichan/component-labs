@@ -1,28 +1,26 @@
 <script setup lang="ts" generic="T extends RowData = RowData">
-import { computed, provide, ref, useId, useSlots } from 'vue';
+import { computed, getCurrentInstance, provide, ref, useId, useSlots } from 'vue';
 import { ElPagination, ElTable } from 'element-plus';
 import './styles/index.scss';
 import { PLUS_TABLE_INJECTION_KEY } from './tokens';
-import { createStore } from './store/helper';
-import { createTableExpose } from './table/expose-helper';
-import { useEvents } from './table/events-helper';
-import { useKeyboard } from './table/keyboard-helper';
-import { useStyle } from './table/style-helper';
-import PlusTableColumnSettings from './table-column-settings/index.vue';
-import PlusTableContextMenu from './table-context-menu/index.vue';
-import PlusTableColumnNode from './table-column';
-import { DEFAULT_PROPS } from './table/defaults';
+import { useTable } from './use-table';
+import { useEvents, useKeyboard, useStyles } from './composables';
+import { createTableExpose } from './utils';
+import { PlusTableColumnNode, PlusTableColumnSettings, PlusTableContextMenu } from './components';
+import { DEFAULT_PROPS } from './table';
 import type { TableInstance } from 'element-plus';
-import type { PlusTable } from './tokens';
-import type { ColumnSettingsExpose, ContextMenuExpose, TableHost } from './store/context';
-import type { EditorSlotProps, HeaderSlotProps } from './table-cell/render-helper';
+import type { EditorSlotProps, HeaderSlotProps } from './cell';
+import type { ColumnSettingsExpose } from './column-settings';
+import type { ContextMenuExpose } from './context-menu';
 import type {
+  ContextMenuItemSlotProps,
   PlusTableEmits,
   PlusTableProps,
-  RowData,
-  ContextMenuItemSlotProps,
-} from './table/defaults';
-import type { CellContext } from './table-column/defaults';
+  PlusTableResolvedProps,
+  TableHost,
+} from './table';
+import type { PlusTableContext } from './tokens';
+import type { CellContext, RowData } from './types';
 
 defineOptions({ name: 'PlusTable', inheritAttrs: false });
 
@@ -30,6 +28,8 @@ const props = withDefaults(defineProps<PlusTableProps<T>>(), DEFAULT_PROPS);
 
 const emit = defineEmits<PlusTableEmits<T>>();
 const slots = useSlots();
+/** setup 期抓一次实例，供运行期判断是否挂了 update:data 监听 */
+const instance = getCurrentInstance()!;
 
 /**
  * header-${prop} / editor-${prop} 是按列 prop 动态生成的插槽名，模板里不会字面出现，
@@ -70,7 +70,6 @@ const columnSettingsRef = ref<ColumnSettingsExpose>();
 const contextMenuRef = ref<ContextMenuExpose>();
 
 const host: TableHost<T> = {
-  props,
   emit,
   slots,
   gridRef,
@@ -78,21 +77,21 @@ const host: TableHost<T> = {
   columnSettingsRef,
   contextMenuRef,
   ids,
+  hasDataListener: () => instance.vnode.props?.['onUpdate:data'] != null,
 };
-const store = createStore<T>(host);
-const table: PlusTable<T> = { ...host, store };
-provide(PLUS_TABLE_INJECTION_KEY, table);
+const resolvedProps = props as PlusTableResolvedProps<T>;
+const table = useTable<T>(resolvedProps, host);
+const context: PlusTableContext<T> = { props: resolvedProps, ...host, ...table };
+provide(PLUS_TABLE_INJECTION_KEY, context);
 
-const style = useStyle(table);
-const events = useEvents(table);
-const keyboard = useKeyboard(table);
+const { tableHeight, isContainerMode: isAdaptiveContainer } = useStyles(resolvedProps, host);
+const events = useEvents(context);
+const keyboard = useKeyboard(context);
 
-const displayTree = store.states.originColumns;
-const tableData = store.states.data;
-const tableHeight = style.tableHeight;
-const isAdaptiveContainer = style.isContainerMode;
+const displayTree = table.originColumns;
+const tableData = table.data;
 const activeCellId = computed(() => {
-  const cell = store.getCurrentCellLocation();
+  const cell = table.getCurrentCellLocation();
   return cell ? ids.cell(cell.rowKey, cell.node.id) : undefined;
 });
 
@@ -109,40 +108,40 @@ defineExpose(
   createTableExpose(
     {
       /** 全表校验 */
-      validate: store.validate,
-      clearValidate: store.clearValidate,
-      getErrors: store.getErrors,
+      validate: table.validate,
+      clearValidate: table.clearValidate,
+      getErrors: table.getErrors,
       /** 行操作 */
-      insertRow: store.insertRow,
-      removeRow: store.removeRow,
-      moveRow: store.moveRow,
-      duplicateRow: store.duplicateRow,
+      insertRow: table.insertRow,
+      removeRow: table.removeRow,
+      moveRow: table.moveRow,
+      duplicateRow: table.duplicateRow,
       /** row 模式行编辑 */
-      startRowEdit: store.startRowEdit,
-      commitRowEdit: store.commitRowEdit,
-      cancelRowEdit: store.cancelRowEdit,
+      startRowEdit: table.startRowEdit,
+      commitRowEdit: table.commitRowEdit,
+      cancelRowEdit: table.cancelRowEdit,
       /** cell 模式单元格编辑 */
-      startEdit: store.startEdit,
-      cancelEdit: store.cancelEdit,
+      startEdit: table.startEdit,
+      cancelEdit: table.cancelEdit,
       // 内部按 E-P 命名为 setCurrentCell；公开 API 继续保留 setActiveCell。
-      setActiveCell: store.setCurrentCell,
+      setActiveCell: table.setCurrentCell,
       /** 列设置 */
-      resetColumnSettings: store.resetSettings,
-      setColumnWidth: store.setColumnWidth,
-      clearColumnWidth: store.clearColumnWidth,
+      resetColumnSettings: table.resetSettings,
+      setColumnWidth: table.setColumnWidth,
+      clearColumnWidth: table.clearColumnWidth,
       /** 撤销重做（history prop 关闭时栈恒为空，undo/redo 为安全空操作） */
-      undo: store.undo,
-      redo: store.redo,
-      canUndo: store.canUndo,
-      canRedo: store.canRedo,
-      clearHistory: store.clearHistory,
+      undo: table.undo,
+      redo: table.redo,
+      canUndo: table.canUndo,
+      canRedo: table.canRedo,
+      clearHistory: table.clearHistory,
       /** 脏行 / 脏格追踪（dirtyTracking prop 关闭时恒无脏格） */
-      getModifiedRows: store.getModifiedRows,
-      getDirtyCells: store.getDirtyCells,
-      isCellDirty: store.isCellDirty,
-      isRowDirty: store.isRowDirty,
-      resetTracking: store.resetTracking,
-      clearDirty: store.clearDirty,
+      getModifiedRows: table.getModifiedRows,
+      getDirtyCells: table.getDirtyCells,
+      isCellDirty: table.isCellDirty,
+      isRowDirty: table.isRowDirty,
+      resetTracking: table.resetTracking,
+      clearDirty: table.clearDirty,
     },
     tableRef,
   ),

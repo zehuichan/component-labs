@@ -5,7 +5,7 @@ vi.mock('../../table-column-settings/index.vue', () => ({
   default: { name: 'PlusTableColumnSettings', render: () => null },
 }));
 
-vi.mock('../../table-column', () => ({
+vi.mock('../../components/column', () => ({
   default: { name: 'PlusTableColumnNode', render: () => null },
 }));
 

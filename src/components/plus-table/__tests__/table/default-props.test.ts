@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import PlusTable from '../../table.vue';
-import { DEFAULT_PROPS } from '../../table/defaults';
+import { DEFAULT_PROPS } from '../../table';
 
 type RuntimeProps = Record<string, { default?: unknown } | undefined>;
 
