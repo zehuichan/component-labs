@@ -9,6 +9,7 @@ import QrconnectCallback from '@/views/composables/qrconnect-callback.vue';
 import UseAutoSaveDemo from '@/views/composables/use-auto-save-demo.vue';
 import UseFormDraftDemo from '@/views/composables/use-form-draft-demo.vue';
 import UseSaveHotkeyDemo from '@/views/composables/use-save-hotkey-demo.vue';
+import UseEmitEffectDemo from '@/views/composables/use-emit-effect-demo.vue';
 import UseSsoDemo from '@/views/composables/use-sso-demo.vue';
 import UseWechatDemo from '@/views/composables/use-wechat-demo.vue';
 import UseWecomDemo from '@/views/composables/use-wecom-demo.vue';
@@ -128,6 +129,12 @@ export const router = createRouter({
           name: 'erp-supplier-quotation-linkage',
           component: SupplierQuotationLinkageDemo,
           meta: { title: '供应商报价（多子表）', group: 'ERP 场景', order: 4, badge: 'beta' },
+        },
+        {
+          path: 'composables/use-emit-effect',
+          name: 'composables-use-emit-effect',
+          component: UseEmitEffectDemo,
+          meta: { title: 'use-emit-effect', group: 'Form', order: 0 },
         },
         {
           path: 'composables/use-auto-save',

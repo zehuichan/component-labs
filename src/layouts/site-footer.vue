@@ -15,6 +15,7 @@ const columns = [
   {
     label: 'COMPOSABLES',
     links: [
+      { label: 'use-emit-effect', to: '/composables/use-emit-effect' },
       { label: 'use-form-draft', to: '/composables/use-form-draft' },
       { label: 'use-auto-save', to: '/composables/use-auto-save' },
       { label: 'use-save-hotkey', to: '/composables/use-save-hotkey' },

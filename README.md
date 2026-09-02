@@ -64,15 +64,17 @@ pnpm dev
 
 ### ERP 场景
 
-引擎：`useEmitEffect`（`@/composables`）。三页为独立完整 demo：
+完整单据 demo；引擎 API 在 `/composables/use-emit-effect`。
 
 - `/erp/api-overview`
 - `/erp/sales-order-linkage`
 - `/erp/purchase-order-linkage`
 - `/erp/expense-report-linkage`
+- `/erp/supplier-quotation-linkage`
 
 ### Form Composables
 
+- `/composables/use-emit-effect`
 - `/composables/use-auto-save`
 - `/composables/use-form-draft`
 - `/composables/use-save-hotkey`
